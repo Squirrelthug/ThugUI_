@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="THUGUI_TOGGLECHAT" header="THUGUI">
+        if ThugUI and ThugUI.GamepadChat then ThugUI.GamepadChat:Toggle() end
+    </Binding>
+    <Binding name="THUGUI_WHEEL">
+        if ThugUI and ThugUI.ControllerRadial then ThugUI.ControllerRadial:Toggle() end
+    </Binding>
+</Bindings>
