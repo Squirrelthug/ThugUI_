@@ -1,6 +1,6 @@
 # ThugUI
 
-A UI suite for World of Warcraft (retail) and WoW Forever, from one folder.
+A UI suite for World of Warcraft (mainline) and WoW Forever.
 Every part is a module you can switch on or off from the Modules page, so
 the parts you do not use cost nothing.
 
@@ -12,7 +12,7 @@ the parts you do not use cost nothing.
   frame hider, minimap and world map additions, gear flags and a seasonal
   panel (retail).
 - **General:** profiles, vendor automation and fishing.
-- **Controller (WoW Forever):** full gamepad play.
+- **Controller (WoW Forever):** fenhanced gamepad play.
 
 ## Install
 
@@ -49,4 +49,6 @@ to listen to an episode or join us in the Discord.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+All rights reserved. You may download ThugUI and use it to play; you may not
+copy, redistribute, sell, or reuse its code without written permission. See
+[LICENSE](LICENSE).
