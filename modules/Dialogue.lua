@@ -364,11 +364,13 @@ end
 function Dialogue:ApplyLayout()
     local cfg = ThugUIDB.Dialogue
     frame:SetWidth(cfg.width)
-    bg:SetColorTexture(0, 0, 0, cfg.opacity)
+    
+    local tr, tg, tb = ThugUI.Theme:Color("background")
+    bg:SetColorTexture(tr, tg, tb, cfg.opacity)
     
     local font, _, flags = titleString:GetFont()
     titleString:SetFont(font, cfg.fontSize - 2, flags)
-    titleString:SetTextColor(1, 0.82, 0)
+    ThugUI.Theme:Paint(titleString, "pageTitle")
     titleString:SetHeight(TitleHeight())
     local top = -(16 + TitleHeight() + 16)
     textScroll:ClearAllPoints()
@@ -521,7 +523,7 @@ local function GetOptionLine(i)
         
         local hl = btn:CreateTexture(nil, "BACKGROUND")
         hl:SetAllPoints()
-        hl:SetColorTexture(1, 0.82, 0, 0.15)
+        ThugUI.Theme:Paint(hl, "selectedFill", "fill")
         hl:Hide()
         btn.padHighlight = hl
         
@@ -746,7 +748,7 @@ local function GetRewardItem(i)
         local focus = btn:CreateTexture(nil, "BACKGROUND")
         focus:SetPoint("TOPLEFT", -3, 3)
         focus:SetPoint("BOTTOMRIGHT", 3, -3)
-        focus:SetColorTexture(1, 0.82, 0, 0.9)
+        ThugUI.Theme:Paint(focus, "accent", "fill")
         focus:Hide()
         btn.padFocus = focus
 

@@ -57,6 +57,8 @@ end
 
 ThugUI.Window:RegisterPage{
     id = "worldmap",
+    
+    scopeKeys = { "WorldMap" },
     category = "interface",
     order = 40,
     summary = "Level ranges and territory colours on the world map's zone names.",

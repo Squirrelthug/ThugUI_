@@ -5,6 +5,9 @@ ThugUI = ThugUI or {}
 ThugUI.modules = {}
 
 
+ThugUI.Dialogs = ThugUI.Dialogs or {}
+
+
 ThugUI.name = "ThugUI"
 
 
@@ -12,7 +15,7 @@ do
     local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
     local ok, v = false, nil
     if get then ok, v = pcall(get, "ThugUI", "Version") end
-    ThugUI.version = (ok and type(v) == "string" and v ~= "") and v or "2.0.0"
+    ThugUI.version = (ok and type(v) == "string" and v ~= "") and v or "2.1.0"
 end
 
 

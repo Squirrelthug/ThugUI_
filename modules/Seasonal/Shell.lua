@@ -226,8 +226,7 @@ function Seasonal:SelectNav(id)
     for navID, btn in pairs(self.navButtons) do
         local selected = (navID == id)
         btn.selectedBG:SetShown(selected)
-        local shade = selected and 1 or 0.75
-        btn.label:SetTextColor(shade, shade, shade)
+        ThugUI.Theme:Paint(btn.label, selected and "navSelected" or "navPage")
     end
 
     local isMain = (id == "main" or id == "" or id == nil)
@@ -266,13 +265,13 @@ function Seasonal:BuildNav(navRow)
 
         local bg = btn:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
-        bg:SetColorTexture(1, 1, 1, 0.10)
+        ThugUI.Theme:Paint(bg, "highlight", "fill")
         bg:Hide()
         btn.selectedBG = bg
 
         local hl = btn:CreateTexture(nil, "HIGHLIGHT")
         hl:SetAllPoints()
-        hl:SetColorTexture(1, 1, 1, 0.08)
+        ThugUI.Theme:Paint(hl, "selectedFill", "fill")
 
         local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         label:SetPoint("CENTER")
@@ -1037,9 +1036,8 @@ local STRINGS = {
     CACHE_TITLE = "Weekly Pinnacle Caches",
     CACHE_DESCRIPTION = "Gear from these caches is limited to %d per week.",
     CACHE_OPENED = "Opened this week: %d of %d",
-    CACHE_UNKNOWN = "Opened this week: not yet detectable.",
-    CACHE_UNKNOWN_WHY = "The hidden weekly quest flag for this season has not been identified, and this badge will not guess one. Run /thugseason sweep, open a cache, then run it again -- the difference names the flag.",
-    CACHE_ALT_UNKNOWN = "This character has no snapshot of its cache count. Log in on them once after the weekly flag has been identified.",
+    CACHE_UNKNOWN = "Opened this week: unknown.",
+    CACHE_ALT_UNKNOWN = "Log in on this character to update it.",
 }
 
 function Seasonal:PaintTraySlot(slot, currencyID, currencies, isCurrent)
@@ -1364,6 +1362,13 @@ function Seasonal:PaintCacheBadge(key)
     
     
     
+    local Data = self.Data or (ThugUI.Seasonal and ThugUI.Seasonal.Data)
+    local ids = Data and Data.WEEKLY_CACHE_QUEST_IDS
+    badge:SetShown(type(ids) == "table" and #ids > 0)
+
+    
+    
+    
     
     badge.icon:SetTexture("Interface\\Icons\\inv_misc_treasurechest01")
 
@@ -1422,8 +1427,9 @@ function Seasonal:PaintCacheBadge(key)
 
         if opened == nil then
             AddNormal(STRINGS.CACHE_UNKNOWN, 0.6, 0.6, 0.6)
-            AddNormal(reason == "nosnapshot" and STRINGS.CACHE_ALT_UNKNOWN
-                or STRINGS.CACHE_UNKNOWN_WHY, 0.8, 0.8, 0.8)
+            if reason == "nosnapshot" then
+                AddNormal(STRINGS.CACHE_ALT_UNKNOWN, 0.8, 0.8, 0.8)
+            end
         else
             AddNormal(string.format(STRINGS.CACHE_OPENED, opened, cap))
         end
@@ -1600,7 +1606,7 @@ function Seasonal:BuildHeader(header)
     end
 
     local rule = header:CreateTexture(nil, "ARTWORK")
-    rule:SetColorTexture(0.4, 0.4, 0.4, 0.4)
+    ThugUI.Theme:Paint(rule, "ruleHeader", "fill")
     rule:SetHeight(1)
     rule:SetPoint("BOTTOMLEFT", header, "BOTTOMLEFT", 0, 0)
     rule:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
@@ -1821,7 +1827,7 @@ function Seasonal:CreateWindow()
         tile = true, tileSize = 32, edgeSize = 24,
         insets = { left = 6, right = 6, top = 6, bottom = 6 },
     })
-    f:SetBackdropColor(0.04, 0.04, 0.06, 0.96)
+    ThugUI.Theme:Paint(f, "background", "backdrop")
 
     
     
@@ -1846,7 +1852,7 @@ function Seasonal:CreateWindow()
 
     local title = titleBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("LEFT", titleBar, "LEFT", 12, 0)
-    title:SetText("|cff00ffccSeasonal|r")
+    title:SetText("|cff00ffccSeason of Thuggery|r")
 
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -4, -4)
@@ -1868,7 +1874,7 @@ function Seasonal:CreateWindow()
     end)
     W = W or ThugUI.Widgets
     if W and type(W.AttachTooltip) == "function" then
-        W.AttachTooltip(autoOpenCB, "Auto-Open with Character Sheet", "Automatically open and close the Seasonal window when you open or close your Character Sheet (C).")
+        W.AttachTooltip(autoOpenCB, "Auto-Open with Character Sheet", "Automatically open and close the Season of Thuggery window when you open or close your Character Sheet (C).")
     end
 
     
@@ -1925,7 +1931,8 @@ function Seasonal:CreateCharacterButton()
     W = W or ThugUI.Widgets
 
     local btn = CreateFrame("Button", "ThugUI_SeasonalCharacterButton", CharacterFrame, "UIPanelButtonTemplate")
-    btn:SetSize(120, 22)
+    
+    btn:SetSize(150, 22)
     
     
     
@@ -1934,9 +1941,9 @@ function Seasonal:CreateCharacterButton()
     
     
     btn:SetPoint("TOPLEFT", CharacterFrame, "TOPLEFT", 8, -8)
-    btn:SetText("Seasonal")
+    btn:SetText("Season of Thuggery")
     btn:SetScript("OnClick", function() Seasonal:Toggle() end)
-    W.AttachTooltip(btn, "Seasonal Progress", "What this season still has to give you.")
+    W.AttachTooltip(btn, "Season of Thuggery", "What this season still has to give you.")
 
     self.characterButton = btn
     return btn
@@ -2088,34 +2095,8 @@ function Seasonal:Initialize()
 
     
     
-    
-    
-    
     SLASH_THUGSEASON1 = "/thugseason"
-    SlashCmdList["THUGSEASON"] = function(msg)
-        local arg, rest = tostring(msg or ""):lower():match("^%s*(%S*)%s*(.*)$")
-
-        if arg == "sweep" then
-            local probe = ThugUI.SeasonProbe
-            if probe and type(probe.SweepQuestFlags) == "function" then
-                local lo, hi = tostring(rest or ""):match("(%d+)%s+(%d+)")
-                probe:SweepQuestFlags(tonumber(lo), tonumber(hi))
-            else
-                print("|cff00ccffThugUI|r: the season probe is not loaded, so there is nothing to sweep.")
-            end
-            return
-        end
-
-        if arg == "quest" then
-            local probe = ThugUI.SeasonProbe
-            if probe and type(probe.DumpQuestRewardTooltips) == "function" then
-                probe:DumpQuestRewardTooltips()
-            else
-                print("|cff00ccffThugUI|r: the season probe is not loaded.")
-            end
-            return
-        end
-
+    SlashCmdList["THUGSEASON"] = function()
         Seasonal:Toggle()
     end
 end

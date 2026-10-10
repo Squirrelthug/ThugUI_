@@ -24,6 +24,9 @@
 
 
 
+
+
+
 local ThugUI = _G.ThugUI
 local ControllerRadial = {}
 ThugUI.ControllerRadial = ControllerRadial
@@ -448,18 +451,23 @@ function ControllerRadial:UtilityPage()
     local page = { header = "Utility", buttons = {} }
 
     
-    page.buttons[1] = {
-        label = "Auras",
-        icon = "gamepad-radial-icon-viewbuffs",
-        iconAtlas = true,
-        isEnabled = Safe(function() return ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("auras") end),
-        disabledMsg = "Aura window is off (Mode & chat page).",
-        action = function()
-            if ThugUI.AuraWindow then
-                ThugUI.AuraWindow:Open()
-            end
-        end,
-    }
+    
+    
+    
+    if ThugUI:IsModuleOn("auras") then
+        page.buttons[1] = {
+            label = "Auras",
+            icon = "gamepad-radial-icon-viewbuffs",
+            iconAtlas = true,
+            isEnabled = Safe(function() return ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("auras") end),
+            disabledMsg = "Buff window needs controller mode.",
+            action = function()
+                if ThugUI.AuraWindow then
+                    ThugUI.AuraWindow:Open()
+                end
+            end,
+        }
+    end
 
     
     if ThugUI:IsModuleOn("travel") then
@@ -597,8 +605,151 @@ function ControllerRadial:PrepPage()
 end
 
 
+
+
+
+
+
+
+local function PartyLeadOrAssist()
+    return IsInGroup and IsInGroup() and (IsLeader() or UnitIsGroupAssistant("player"))
+end
+
+local function PartyCall(label, fn, ...)
+    if type(fn) ~= "function" then return Log("PARTY: %s missing on this client", label) end
+    local ok, err = pcall(fn, ...)
+    if not ok then Log("PARTY: %s refused: %s", label, tostring(err)) end
+end
+
+function ControllerRadial:PartyPage()
+    local page = { header = "Party", buttons = {} }
+    page.buttons[1] = {
+        label = _G.READY_CHECK or "Ready check",
+        icon = "Interface\\RaidFrame\\ReadyCheck-Ready",
+        isEnabled = Safe(PartyLeadOrAssist),
+        disabledMsg = "Only the leader or an assistant can.",
+        action = function() PartyCall("DoReadyCheck", C_PartyInfo and C_PartyInfo.DoReadyCheck or DoReadyCheck) end,
+    }
+    page.buttons[2] = {
+        label = _G.ROLE_POLL or "Role check",
+        isEnabled = Safe(PartyLeadOrAssist),
+        disabledMsg = "Only the leader or an assistant can.",
+        action = function() PartyCall("InitiateRolePoll", InitiateRolePoll) end,
+    }
+    page.buttons[3] = {
+        label = "Countdown",
+        isEnabled = Safe(PartyLeadOrAssist),
+        disabledMsg = "Only the leader or an assistant can.",
+        action = function() PartyCall("DoCountdown", C_PartyInfo and C_PartyInfo.DoCountdown, 10) end,
+    }
+    page.buttons[4] = {
+        label = "Mark target",
+        icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_8",
+        isEnabled = Safe(function() return UnitExists("target") end),
+        disabledMsg = "You have no target.",
+        stayOpen = true,
+        action = function() ControllerRadial:EnterSub("marks") end,
+    }
+    page.buttons[5] = {
+        label = "World markers",
+        icon = "GM-raidMarker1",
+        iconAtlas = true,
+        isEnabled = Safe(function() return not (InCombatLockdown and InCombatLockdown()) end),
+        disabledMsg = "Out of combat only.",
+        action = function() ControllerRadial:EnterSub("markers") end,
+    }
+    page.buttons[6] = {
+        label = _G.PARTY_LEAVE or "Leave party",
+        icon = "Interface\\Icons\\Spell_Shadow_SacrificialShield",
+        isEnabled = Safe(function() return IsInGroup() end),
+        disabledMsg = "You are not in a group.",
+        action = function() PartyCall("LeaveParty", C_PartyInfo and C_PartyInfo.LeaveParty or LeaveParty) end,
+    }
+    
+    
+    
+    if PartyUtil and PartyUtil.CanLeaveInstance then
+        page.buttons[7] = {
+            label = _G.INSTANCE_PARTY_LEAVE or "Leave instance group",
+            isEnabled = Safe(function() return PartyUtil.CanLeaveInstance() end),
+            disabledMsg = "You are not in an instance group.",
+            action = function() ThugUI.Dialog:Show("THUGUI_LEAVE_INSTANCE_GROUP") end,
+        }
+    end
+    return page
+end
+
+function ControllerRadial:ShowsPartyPage()
+    if not ThugUI:IsModuleOn("partyframes") then return false end
+    local ok, inGroup = pcall(IsInGroup)
+    local ok2, inRaid = pcall(IsInRaid)
+    return ok and inGroup == true and not (ok2 and inRaid == true)
+end
+
+
+
+
+
+
+
+
+
+
+local UNIT_SUBS = { unit = true, unit_sub = true }
+
+local function UnitEntry(row)
+    local e = { label = row.text, icon = row.icon }
+    local usable = row.enabled ~= false
+    e.isActive = row.checked and function() return true end or nil
+    if row.macro then
+        e.travelEntry = { kind = "macro", text = row.macro, name = row.text }
+        e.action = MarkerFallback
+        e.isEnabled = function()
+            return usable and not (InCombatLockdown and InCombatLockdown()) and ThugUI.Travel.crossBound == true
+        end
+        e.disabledMsg = function()
+            if InCombatLockdown and InCombatLockdown() then return "Out of combat only." end
+            return row.reason or "Not available right now."
+        end
+        return e
+    end
+    e.isEnabled = function() return usable end
+    e.disabledMsg = row.reason
+    if row.sub then
+        e.stayOpen = true
+        e.action = function() ControllerRadial:EnterUnitSub(row) end
+    elseif row.confirm then
+        e.action = function() ThugUI.Dialog:Show(row.confirm) end
+    else
+        e.action = row.run or function() end
+    end
+    return e
+end
+
+
+local function UnitPages(rows, header)
+    local pages, page = {}, nil
+    for _, row in ipairs(rows) do
+        if not row.title then
+            if not page or #page.buttons == SEGMENTS then
+                local n = #pages + 1
+                page = { header = n == 1 and header or (header .. " " .. n), buttons = {},
+                    hint = function() return ("Point, then press %s"):format(ButtonGlyph(PAD_CONFIRM)) end }
+                pages[n] = page
+            end
+            page.buttons[#page.buttons + 1] = UnitEntry(row)
+        end
+    end
+    if #pages == 0 then pages[1] = { header = header, buttons = {}, empty = "Nothing to do with this unit." } end
+    return pages
+end
+ControllerRadial.UnitPages = UnitPages
+
+
 function ControllerRadial:BuildPages()
-    local pages = { GROUP, self:UtilityPage() }
+    local pages = { GROUP }
+    if self:ShowsPartyPage() then table.insert(pages, self:PartyPage()) end
+    table.insert(pages, self:UtilityPage())
     if ThugUI:IsModuleOn("prep") and ThugUI.Prep then
         table.insert(pages, self:PrepPage())
     end
@@ -616,8 +767,10 @@ local function IsPrepSub(sub)
     return type(sub) == "string" and sub:sub(1, 5) == "prep_"
 end
 
+
+
 local function IsCastSub(sub)
-    return sub == "travel" or sub == "markers" or IsPrepSub(sub)
+    return sub == "travel" or sub == "markers" or IsPrepSub(sub) or UNIT_SUBS[sub] == true
 end
 
 local function ResetSubDial(self)
@@ -631,6 +784,7 @@ local function ResetSubDial(self)
 
         self.pages = self.savedPages or self.pages
         self.savedPages = nil
+        self.unitPages, self.unitPageIndex, self.unitToken = nil, nil, nil
         self.sub = nil
         self.handPick = nil
         self.inTravelMode = false
@@ -656,7 +810,28 @@ function ControllerRadial:EnterSub(kind)
 end
 
 function ControllerRadial:LeaveSub()
+    
+    
+    if self.sub == "unit_sub" and self.unitPages then
+        self.pages = self.unitPages
+        self.pageIndex = self.unitPageIndex or 1
+        self.sub = "unit"
+        self.selected = nil
+        self:Draw()
+        return
+    end
     ResetSubDial(self)
+    self:Draw()
+end
+
+
+function ControllerRadial:EnterUnitSub(row)
+    self.unitPages = self.pages
+    self.unitPageIndex = self.pageIndex
+    self.pages = UnitPages(row.sub, row.text)
+    self.pageIndex = 1
+    self.sub = "unit_sub"
+    self.selected = nil
     self:Draw()
 end
 
@@ -949,10 +1124,6 @@ function ControllerRadial:EnterTravel()
     self:EnterSub("travel")
 end
 
-function ControllerRadial:LeaveTravel()
-    self:LeaveSub()
-end
-
 function ControllerRadial:RebuildTravelPages()
     if self.sub == "travel" then
         self:RebuildSubPages()
@@ -1204,7 +1375,15 @@ function ControllerRadial:Stick(x, y)
             self.stickSelected = false
             
             
-            if not IsCastSub(self.sub) then
+            
+            
+            local entry = self.pages[self.pageIndex].buttons[self.selected]
+            
+            
+            
+            
+            local aimOnly = IsCastSub(self.sub)
+            if not aimOnly then
                 self:Pick(self.selected)
                 
                 
@@ -1353,6 +1532,10 @@ end
 
 function ControllerRadial:GetListener() return listener end
 
+
+
+function ControllerRadial:IsListening() return listener ~= nil and listener.listening == true end
+
 local function OnButton(_, button)
     local self = ControllerRadial
     held[button] = true
@@ -1364,6 +1547,8 @@ local function OnButton(_, button)
             self.handPick = nil
             self:RebuildSubPages()
             self:Draw()
+        elseif self.sub == "unit" then
+            self:Close()
         elseif self.sub then
             self:LeaveSub()
         else
@@ -1451,34 +1636,237 @@ end
 local POINTING_STICK = "Camera"
 local seenSticks = {}
 
+
+
+
+
+
+
 local function OnStick(_, stick, x, y)
     if not seenSticks[stick] then
         seenSticks[stick] = true
-        Log("stick seen: %s%s", tostring(stick), stick == POINTING_STICK and " (points)" or " (ignored)")
+        Log("stick seen: %s%s", tostring(stick), stick == POINTING_STICK and " (points)" or " (passed on)")
     end
-    if stick ~= POINTING_STICK then return end
+    if stick ~= POINTING_STICK then return true end
     ControllerRadial:Stick(x or 0, y or 0)
+    return false
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local CAMERA_CVARS = { "GamePadCameraYawSpeed", "GamePadCameraPitchSpeed" }
+
+local SLOW_CAMERA = { "0", "0.01", "0.05", "0.1", "0.2", "0.3" }
+
+local function CanPoll()
+    return C_GamePad and C_GamePad.GetDeviceMappedState and C_GamePad.StickIndexToConfigName and true or false
+end
+
+
+function ControllerRadial:ReadPointingStick()
+    local ok, state = pcall(C_GamePad.GetDeviceMappedState)
+    if not ok or type(state) ~= "table" or type(state.sticks) ~= "table" then return nil end
+    for i = 1, (state.stickCount or #state.sticks) do
+        local okName, name = pcall(C_GamePad.StickIndexToConfigName, i - 1)   
+        if okName and name == POINTING_STICK then
+            local st = state.sticks[i]
+            if type(st) == "table" then return st.x or 0, st.y or 0 end
+        end
+    end
+    return nil
+end
+
+
+
+
+
+function ControllerRadial:LogCameraCVars()
+    if self.cameraCVarsLogged or type(ConsoleGetAllCommands) ~= "function" then return end
+    self.cameraCVarsLogged = true
+    local ok, list = pcall(ConsoleGetAllCommands)
+    if not ok or type(list) ~= "table" then
+        Log("camera CVars: ConsoleGetAllCommands failed: %s", tostring(list))
+        return
+    end
+    local found = {}
+    for _, info in ipairs(list) do
+        local name = type(info) == "table" and info.command
+        if type(name) == "string" then
+            local l = name:lower()
+            if l:find("gamepad", 1, true) and (l:find("camera", 1, true) or l:find("yaw", 1, true)
+                or l:find("pitch", 1, true) or l:find("look", 1, true) or l:find("turn", 1, true)) then
+                local okv, v = pcall(GetCVar, name)
+                found[#found + 1] = name .. "=" .. tostring(okv and v or "?")
+            end
+        end
+    end
+    table.sort(found)
+    Log("camera CVars: %s", #found > 0 and table.concat(found, ", ") or "none")
+end
+
+local function CamStore()
+    ThugUIDB.ControllerRadial = ThugUIDB.ControllerRadial or {}
+    return ThugUIDB.ControllerRadial
+end
+
+
+function ControllerRadial:HoldCamera(on)
+    local store = CamStore()
+    if on then
+        if store.camSaved then return end
+        local saved, found = {}, false
+        for _, name in ipairs(CAMERA_CVARS) do
+            local ok, v = pcall(GetCVar, name)
+            if ok and v ~= nil then
+                saved[name] = v
+                found = true
+            end
+        end
+        if not found then
+            if ThugUI.Diagnostics then
+                ThugUI.Diagnostics:LogOnce("wheel-no-camcvar", "WHEEL", "no pad camera speed CVar on this client: the right stick turns the camera while the wheel is up")
+            end
+            return
+        end
+        store.camSaved = saved
+        
+        
+        
+        
+        
+        
+        local report = {}
+        local set = (C_CVar and C_CVar.SetCVar) or SetCVar
+        for name in pairs(saved) do
+            if C_CVar and C_CVar.GetCVarInfo and not self.camInfoLogged then
+                local okI, v, def, _, _, locked, secure, readOnly = pcall(C_CVar.GetCVarInfo, name)
+                if okI then
+                    Log("camera CVar %s: value=%s default=%s locked=%s secure=%s readOnly=%s", name,
+                        tostring(v), tostring(def), tostring(locked), tostring(secure), tostring(readOnly))
+                end
+            end
+            local kept, tried = nil, {}
+            for _, try in ipairs(SLOW_CAMERA) do
+                local okS, res = pcall(set, name, try)
+                local okR, now = pcall(GetCVar, name)
+                now = okR and now or "?"
+                tried[#tried + 1] = try .. "->" .. tostring(okS and res) .. "/" .. tostring(now)
+                if tonumber(now) and math.abs(tonumber(now) - tonumber(try)) < 0.001 then kept = now break end
+            end
+            report[#report + 1] = name .. "=" .. tostring(kept or "refused") .. " (" .. table.concat(tried, " ") .. ")"
+        end
+        self.camInfoLogged = true
+        table.sort(report)
+        Log("camera slowed: %s", table.concat(report, "; "))
+    else
+        local saved = store.camSaved
+        if not saved then return end
+        
+        
+        local set = (C_CVar and C_CVar.SetCVar) or SetCVar
+        for name, v in pairs(saved) do
+            local ok, err = pcall(set, name, v)
+            if not ok then Log("camera restore: %s refused: %s", name, tostring(err)) end
+        end
+        store.camSaved = nil
+        Log("camera given back")
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+local stickListener
+local function StickListener()
+    if stickListener then return stickListener end
+    stickListener = CreateFrame("Frame", "ThugUI_WheelSticks", UIParent)
+    stickListener:SetScript("OnGamePadStick", function(_, stick, x, y)
+        if not seenSticks[stick] then
+            seenSticks[stick] = true
+            Log("stick listener: %s %s", tostring(stick), stick == POINTING_STICK and "kept" or "passed on")
+        end
+        if stick == POINTING_STICK then
+            ControllerRadial:Stick(x or 0, y or 0)
+            return false
+        end
+        return true
+    end)
+    return stickListener
+end
+ControllerRadial.StickListener = StickListener
+
+
+
+
+
+
+
+
+ControllerRadial.USE_STICK_LISTENER = false
 
 local function SetInput(on)
     if frame.EnableGamePadButton then
         local ok, err = pcall(frame.EnableGamePadButton, frame, on)
         if not ok then Log("EnableGamePadButton(%s) refused: %s", tostring(on), tostring(err)) end
     end
-    if frame.EnableGamePadStick then
-        local ok, err = pcall(frame.EnableGamePadStick, frame, on)
-        if not ok then Log("EnableGamePadStick(%s) refused: %s", tostring(on), tostring(err)) end
+    
+    if frame.EnableGamePadStick then pcall(frame.EnableGamePadStick, frame, false) end
+    local l = StickListener()
+    if ControllerRadial.USE_STICK_LISTENER and l.EnableGamePadStick then
+        local ok, err = pcall(l.EnableGamePadStick, l, on)
+        if not ok then Log("stick listener EnableGamePadStick(%s) refused: %s", tostring(on), tostring(err)) end
+        ControllerRadial.polling = false
+    else
+        if l.EnableGamePadStick then pcall(l.EnableGamePadStick, l, false) end
+        ControllerRadial.polling = on and CanPoll() or false
+        if CanPoll() then ControllerRadial:HoldCamera(on) end
     end
 end
 
+
+
+
+local function InFight()
+    return InCombatLockdown and InCombatLockdown() or false
+end
+
 function ControllerRadial:Open()
+    
+    
+    
+    if InFight() then
+        Refuse("Not in combat.")
+        Log("open refused: in combat")
+        return
+    end
     if not frame then
         BuildFrame()
         
         
         if ThugUI.CombatClose then
             ThugUI.CombatClose:Register("wheel", function() return frame and frame:IsShown() end,
-                function() ControllerRadial:Close() end, { reopenInCombat = true })
+                function() ControllerRadial:Close() end, { reopenInCombat = false })
         end
         frame:SetScript("OnGamePadButtonDown", OnButton)
         frame:SetScript("OnGamePadStick", OnStick)
@@ -1487,6 +1875,10 @@ function ControllerRadial:Open()
         frame:SetScript("OnHide", function() SetInput(false) end)
         frame.timeSinceDraw = 0
         frame:SetScript("OnUpdate", function(self, elapsed)
+            if ControllerRadial.polling then
+                local x, y = ControllerRadial:ReadPointingStick()
+                if x then ControllerRadial:Stick(x, y) end
+            end
             if ControllerRadial.inTravelMode then
                 self.timeSinceDraw = self.timeSinceDraw + elapsed
                 if self.timeSinceDraw >= 1.0 then
@@ -1510,6 +1902,81 @@ function ControllerRadial:Open()
     Crumb("open")
     Log("opened on %s, %d page(s), combat=%s", tostring(self.pages[self.pageIndex].header),
         #self.pages, tostring(InCombatLockdown()))
+end
+
+
+function ControllerRadial:OpenUnit(unit)
+    if not ThugUI.UnitMenu then return false end
+    local rows, which = ThugUI.UnitMenu:Entries(unit)
+    if not which then return false end
+    
+    
+    local keep = self.pageIndex
+    self:Open()
+    if not (frame and frame:IsShown()) then return false end
+    self.savedPages, self.savedPageIndex = nil, keep
+    self.unitToken = unit
+    self.pages = UnitPages(rows, ThugUI.UnitMenu:Name(unit) or (_G.TARGET or "Target"))
+    self.pageIndex, self.selected, self.stickSelected = 1, nil, false
+    self.sub = "unit"
+    if not (InCombatLockdown and InCombatLockdown()) then ThugUI.Travel:BindCross(true) end
+    self:Draw()
+    Log("unit wheel for %s (%s), %d page(s), combat=%s", tostring(unit), tostring(which),
+        #self.pages, tostring(InCombatLockdown()))
+    return true
+end
+
+function ControllerRadial:InUnitMode() return UNIT_SUBS[self.sub] == true end
+
+
+
+
+
+
+
+
+
+
+
+
+
+local function TriangleButton()
+    local bar = _G.GamepadMainActionBarFrame
+    local page = bar and bar.PageUnit
+    local bars = page and page.actionBars
+    local top = bars and bars.topBar
+    local right = top and top.Right
+    return right and right.ActionButton2
+end
+
+function ControllerRadial:OnTriangle(down)
+    if down then return end
+    if not ThugUI:IsModuleOn("controller") then return end
+    if not (ThugUI.ControllerTarget and ThugUI.ControllerTarget:IsActive()) then return end
+    if not UnitExists("target") then return end
+    
+    local GM = _G.GamepadMode
+    if GM and GM.IsTargetingModifierDown then
+        local ok, held = pcall(GM.IsTargetingModifierDown)
+        if ok and held == true then return end
+    end
+    Crumb("triangle")
+    C_Timer.After(0, function() ControllerRadial:OpenUnit("target") end)
+end
+
+function ControllerRadial:InstallTriangle()
+    if self.triangleHooked then return true end
+    local btn = TriangleButton()
+    if not (btn and btn.HookScript) then
+        if ThugUI.Diagnostics then
+            ThugUI.Diagnostics:LogOnce("wheel-triangle-missing", "WHEEL", "Triangle: Blizzard's Inspect button not found")
+        end
+        return false
+    end
+    btn:HookScript("PostClick", function(_, _, down) ControllerRadial:OnTriangle(down) end)
+    self.triangleHooked = true
+    Log("Triangle: hooked Blizzard's Inspect button")
+    return true
 end
 
 function ControllerRadial:Close()
@@ -1573,8 +2040,19 @@ function ControllerRadial:Initialize()
     ThugUI.SafeRegisterEvent(f, "PLAYER_LOGIN")
     ThugUI.SafeRegisterEvent(f, "PLAYER_REGEN_ENABLED")
     ThugUI.SafeRegisterEvent(f, "UPDATE_BINDINGS")
-    f:SetScript("OnEvent", function(self, event)
+    
+    
+    ThugUI.SafeRegisterEvent(f, "PLAYER_TARGET_CHANGED")
+    ThugUI.SafeRegisterEvent(f, "ADDON_LOADED")
+    f:SetScript("OnEvent", function(self, event, arg1)
         if not ThugUI:IsModuleOn("controller") then self:UnregisterAllEvents() return end
+        if event == "PLAYER_TARGET_CHANGED" then
+            if ControllerRadial:InUnitMode() then ControllerRadial:Close() end
+            return
+        elseif event == "ADDON_LOADED" then
+            if arg1 == "Blizzard_GamepadActionBars" then ControllerRadial:InstallTriangle() end
+            return
+        end
         if event == "MINIMAP_UPDATE_TRACKING" or event == "PLAYER_EQUIPMENT_CHANGED"
             or event == "BAG_UPDATE_DELAYED" then
             if frame and frame:IsShown() then ControllerRadial:Draw() end
@@ -1585,6 +2063,10 @@ function ControllerRadial:Initialize()
             Log("wheel binding now %s", button and (table.concat(mods, "-") .. (#mods > 0 and "-" or "") .. button) or "unbound")
         else
             ControllerRadial:StartListener()
+            ControllerRadial:InstallTriangle()
+            
+            if event == "PLAYER_LOGIN" and not (frame and frame:IsShown()) then ControllerRadial:HoldCamera(false) end
+            if event == "PLAYER_LOGIN" then ControllerRadial:LogCameraCVars() end
         end
     end)
 

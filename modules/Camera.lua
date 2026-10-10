@@ -649,7 +649,3 @@ end
 function Camera:IsUIFaded()
     return uiFaded
 end
-
-function Camera:IsDialogueActive()
-    return isDialogueActive
-end

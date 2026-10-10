@@ -158,7 +158,7 @@ function Page:Relayout()
             removeBtn:SetText("X")
             removeBtn:SetPoint("TOPRIGHT", 0, 0)
 
-            local name = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+            local name = ThugUI.Theme:Paint(row:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontHighlight")), "label")
             name:SetPoint("TOPLEFT", 0, 0)
             
             
@@ -207,6 +207,8 @@ end
 
 ThugUI.Window:RegisterPage{
     id = "automation",
+    
+    scopeKeys = { "Automation" },
     category = "general",
     order = 20,
     summary = "Automatic vendor and repair options.",

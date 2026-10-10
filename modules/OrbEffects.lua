@@ -131,11 +131,6 @@ function OE:Draft(target)
     return store[OE.DRAFT]
 end
 
-function OE:SetDraft(target, stack)
-    local store = self:PackStore()[target]
-    store[OE.DRAFT] = { name = "Draft", stack = ThugUI.OrbArt.Copy(stack) }
-end
-
 function OE:SavePack(target, name)
     if not name or name == "" or name == OE.DRAFT then
         return false, "Invalid pack name"
@@ -220,7 +215,9 @@ function OE:Apply(orbKey)
 
     local canvas = self._canvas[orbKey]
     if not canvas then
-        canvas = ThugUI.OrbArt:NewCanvas(f, { kind = "orb", mask = f.mask, baseLevel = f.fill:GetFrameLevel() })
+        
+        
+        canvas = ThugUI.OrbArt:NewCanvas(f.body or f, { kind = "orb", mask = f.mask, baseLevel = f.fill:GetFrameLevel() })
         self._canvas[orbKey] = canvas
     end
     

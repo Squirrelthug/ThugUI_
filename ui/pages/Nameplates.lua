@@ -384,6 +384,8 @@ ThugUI.Nameplates.Page = Page
 
 ThugUI.Window:RegisterPage{
     id = "nameplates",
+    
+    scopeKeys = { "Nameplates" },
     category = "combat",
     order = 40,
     summary = "Name-only plates out of combat, class colours, level text.",

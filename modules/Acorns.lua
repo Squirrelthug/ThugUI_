@@ -2,6 +2,12 @@
 
 
 
+
+
+
+
+
+
 local MODULE_NAME = "Acorns"
 local MEDIA_PATH = "Interface\\AddOns\\ThugUI\\media\\"
 
@@ -469,6 +475,7 @@ function Acorns:CreateStreamChatFrame()
     streamMessageFrame = smf
 
     self:ApplyStreamLock()
+    self:ApplyStreamVisibility()
     
     self:RenderStream()
 end
@@ -503,6 +510,26 @@ end
 function Acorns:SetStreamUnlocked(on)
     dbChat.streamUnlocked = on and true or false
     self:ApplyStreamLock()
+    self:ApplyStreamVisibility()
+end
+
+
+
+
+
+
+
+function Acorns:StreamAlpha(alpha)
+    if dbChat and dbChat.streamUnlocked then return 1 end
+    local V = ThugUI.Visibility
+    if dbChat and dbChat.streamShowInCombat == true and V and V:InCombat() then return 1 end
+    return alpha or 1
+end
+
+function Acorns:ApplyStreamVisibility()
+    if not streamChatFrame then return end
+    local V = ThugUI.Visibility
+    streamChatFrame:SetAlpha(self:StreamAlpha(V and V:CurrentAlpha("acornStream") or 1))
 end
 
 function Acorns:SetStreamSize(w, h)
@@ -511,18 +538,6 @@ function Acorns:SetStreamSize(w, h)
     if streamChatFrame then
         streamChatFrame:SetSize(dbChat.streamWidth or 420, dbChat.streamHeight or 220)
     end
-end
-
-function Acorns:SetStreamFontSize(v)
-    dbChat.fontSize = v
-    if streamMessageFrame then
-        streamMessageFrame:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", v, dbChat.fontOutline or "OUTLINE")
-    end
-end
-
-function Acorns:SetStreamTimestamps(on)
-    dbChat.showTimestamp = on and true or false
-    self:RenderStream()
 end
 
 
@@ -813,22 +828,6 @@ function Acorns:SetChatMode(mode)
     
     
     
-    
-    
-    
-    if ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("chat") then
-        QueueCombatAction(function()
-            if ChatFrame1 then ChatFrame1:Hide() end
-            if GeneralDockManager then GeneralDockManager:Hide() end
-            if streamChatFrame then streamChatFrame:Hide() end
-            
-            
-            
-            local GC = ThugUI.GamepadChat
-            if GC and GC.AdoptEditBoxes then pcall(GC.AdoptEditBoxes, GC) end
-        end)
-        return
-    end
     dbChat.mode = mode
 
     QueueCombatAction(function()
@@ -921,7 +920,6 @@ local objectivesAlphaBeforeCombat
 
 local function ShouldDimForCombat()
     if not dbObj or not dbObj.hideInCombat then return false end
-    if ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("objectives") then return false end
     
     
     
@@ -1008,12 +1006,7 @@ local function ApplyObjectivesVisibility(visible)
             
             
             
-            
-            
-            local CM = ThugUI.ControllerMode
-            if not (CM and CM:Uses("objectives")) then
-                tracker:SetParent(GetHiddenHolder())
-            end
+            tracker:SetParent(GetHiddenHolder())
 
             objectivesAcornFrame.ring:SetVertexColor(0.5, 0.5, 0.5, 0.5)
             objectivesAcornFrame.icon:SetText("OFF")
@@ -1026,14 +1019,10 @@ end
 
 function Acorns:SetObjectivesVisibility(visible)
     dbObj.visible = visible
-    
-    
-    if ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("objectives") then return end
     ApplyObjectivesVisibility(visible)
 end
 
 function Acorns:ToggleObjectivesVisibility()
-    if ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("objectives") then return end
     self:SetObjectivesVisibility(not dbObj.visible)
 end
 
@@ -1057,27 +1046,12 @@ end
 
 
 
-
-local objectivesRevealed = false
 local function ObjectivesWantHidden()
     if not dbObj then return false end
-    local CM = ThugUI.ControllerMode
-    
-    
-    if CM and CM:Uses("objectives") then return false end
     return dbObj.visible == false
 end
 
 local function ReassertObjectivesVisibility()
-    
-    
-    
-    local CM = ThugUI.ControllerMode
-    if dbObj and CM and CM:Uses("objectives") then
-        
-        Acorns.ApplyControllerGhost(not objectivesRevealed)
-        return
-    end
     if not ObjectivesWantHidden() then return end
 
     local tracker = GetObjectivesTrackerFrame()
@@ -1099,188 +1073,6 @@ local function ReassertObjectivesVisibility()
         if not ObjectivesWantHidden() then return end
         tracker:SetParent(GetHiddenHolder())
     end)
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local ghostShield
-local ghostActive = false
-local alphaBeforeGhost
-
-local function GetGhostShield(tracker)
-    if not ghostShield then
-        ghostShield = CreateFrame("Frame", "ThugUI_TrackerShield", UIParent)
-        ghostShield:EnableMouse(true)
-        ghostShield:Hide()
-    end
-    ghostShield:ClearAllPoints()
-    ghostShield:SetAllPoints(tracker)
-    if tracker.GetFrameStrata then ghostShield:SetFrameStrata(tracker:GetFrameStrata()) end
-    if tracker.GetFrameLevel then ghostShield:SetFrameLevel(tracker:GetFrameLevel() + 50) end
-    return ghostShield
-end
-
-
-local function ApplyControllerGhost(ghost)
-    local tracker = GetObjectivesTrackerFrame()
-    if not tracker then return end
-    if tracker:GetParent() ~= UIParent then
-        
-        
-        
-        QueueCombatAction(function()
-            local CM = ThugUI.ControllerMode
-            if CM and CM:Uses("objectives") and tracker:GetParent() ~= UIParent then
-                tracker:SetParent(UIParent)
-            end
-        end)
-    end
-    if ghost then
-        if not ghostActive then
-            alphaBeforeGhost = tracker.GetAlpha and tracker:GetAlpha() or 1
-            if alphaBeforeGhost == 0 then alphaBeforeGhost = 1 end
-            ghostActive = true
-        end
-        tracker:SetAlpha(0)
-        GetGhostShield(tracker):Show()
-    else
-        tracker:SetAlpha(ghostActive and alphaBeforeGhost or 1)
-        if ghostShield then ghostShield:Hide() end
-    end
-end
-
-Acorns.ApplyControllerGhost = ApplyControllerGhost
-
-
-local function ClearControllerGhost()
-    local tracker = GetObjectivesTrackerFrame()
-    if ghostActive and tracker then tracker:SetAlpha(alphaBeforeGhost or 1) end
-    ghostActive = false
-    alphaBeforeGhost = nil
-    if ghostShield then ghostShield:Hide() end
-end
-
-local function TrackerHasGamepadFocus(tracker)
-    local GM = _G.GamepadMode
-    local fcm = GM and GM.FrameControlsManager
-    if not fcm or not fcm.isUIFocused then return false end
-    local ok, active = pcall(fcm.GetActiveFrame, fcm)
-    return ok and active == tracker
-end
-
-function Acorns:OnGamepadFocusChanged()
-    local tracker = GetObjectivesTrackerFrame()
-    local CM = ThugUI.ControllerMode
-    if not tracker or not dbObj or not (CM and CM:Uses("objectives")) then
-        objectivesRevealed = false
-        return
-    end
-
-    local want = TrackerHasGamepadFocus(tracker)
-    if want == objectivesRevealed then return end
-
-    objectivesRevealed = want
-    ApplyControllerGhost(not want)
-    if ThugUI.Diagnostics then
-        ThugUI.Diagnostics:Log("ACORNS", want and "tracker shown: gamepad focus is on it"
-            or "tracker transparent again: focus left it")
-    end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-local hookedTrackerButtons = {}
-local function TrackerPressState(tracker)
-    return ("shown=%s visible=%s alpha=%s parent=%s"):format(
-        tostring(tracker:IsShown()), tostring(tracker.IsVisible and tracker:IsVisible()),
-        tostring(tracker.GetAlpha and tracker:GetAlpha()),
-        tracker:GetParent() == UIParent and "UIParent" or "other")
-end
-
-function Acorns:HookShortcutsObjectives()
-    local CM = ThugUI.ControllerMode
-    local bar = CM and CM.GetShortcutsBar and CM:GetShortcutsBar()
-    if not bar then return false end
-    for _, side in ipairs({ bar.Left, bar.Right }) do
-        local b = side and side.ActionButton2
-        if b and not hookedTrackerButtons[b] and b.HookScript then
-            local ok1 = pcall(b.HookScript, b, "PreClick", function(self, _, down)
-                if not down or self ~= bar.dpadTopButton then return end
-                if not (CM:Uses("objectives") and dbObj) then return end
-                local tracker = GetObjectivesTrackerFrame()
-                if not tracker then return end
-                
-                
-                
-                if not objectivesRevealed then ApplyControllerGhost(true) end
-                if ThugUI.Diagnostics then
-                    ThugUI.Diagnostics:Log("ACORNS", "shortcut objectives pressed; tracker %s", TrackerPressState(tracker))
-                end
-            end)
-            local ok2 = pcall(b.HookScript, b, "PostClick", function(self, _, down)
-                if not down or self ~= bar.dpadTopButton then return end
-                if not (CM:Uses("objectives") and dbObj) then return end
-                local tracker = GetObjectivesTrackerFrame()
-                if tracker and ThugUI.Diagnostics then
-                    ThugUI.Diagnostics:Log("ACORNS", "after Blizzard's handler: focus %s",
-                        TrackerHasGamepadFocus(tracker) and "is on the tracker" or "is NOT on the tracker")
-                end
-            end)
-            if ok1 and ok2 then
-                hookedTrackerButtons[b] = true
-                if ThugUI.Diagnostics then
-                    ThugUI.Diagnostics:Log("ACORNS", "shortcuts D-pad up hook installed on %s",
-                        side == bar.Left and "Left" or "Right")
-                end
-            end
-        end
-    end
-    return true
-end
-
-function Acorns:IsObjectivesRevealed()
-    return objectivesRevealed
 end
 
 
@@ -1352,11 +1144,6 @@ end
 function Acorns:OpenOptionsMenu(acorn)
     
     if not ThugUI.CombatClose:Allow("orbMenu") then return end
-    
-    
-    local CM = ThugUI.ControllerMode
-    if CM and ((acorn == chatAcornFrame and CM:Uses("chat"))
-        or (acorn == objectivesAcornFrame and CM:Uses("objectives"))) then return end
     if not optionsMenuFrame then
         local menu = CreateFrame("Frame", "ThugUI_AcornOptionsMenu", UIParent, "BackdropTemplate")
         optionsMenuFrame = menu
@@ -1374,7 +1161,7 @@ function Acorns:OpenOptionsMenu(acorn)
             tile = true, tileSize = 16, edgeSize = 16,
             insets = { left = 4, right = 4, top = 4, bottom = 4 }
         })
-        menu:SetBackdropColor(0.08, 0.08, 0.12, 0.95)
+        ThugUI.Theme:Paint(menu, "listBackground", "backdrop")
 
         local title = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         title:SetPoint("TOP", menu, "TOP", 0, -12)
@@ -1530,6 +1317,11 @@ function Acorns:Initialize()
     
     dbChat = db.chat
     self:RegisterChatEvents()
+    if ThugUI.Visibility then
+        ThugUI.Visibility:Register("acornStream", function(alpha)
+            if streamChatFrame then streamChatFrame:SetAlpha(Acorns:StreamAlpha(alpha)) end
+        end)
+    end
 
     dbChat = db.chat
     dbObj = db.objectives
@@ -1573,72 +1365,9 @@ function Acorns:Initialize()
         end
     end
 
-    if ThugUI.ControllerMode then
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        local chatTaken, objTaken = nil, nil
-        local function Log(fmt, ...)
-            if ThugUI.Diagnostics then ThugUI.Diagnostics:Log("CONTROLLER", fmt, ...) end
-        end
-        local function ApplyChatTakeover()
-            local take = ThugUI.ControllerMode:Uses("chat")
-            if take ~= chatTaken then
-                Log("chat takeover %s; chat acorn mode %s, acorn %s",
-                    take and "starts" or "ends", tostring(dbChat.mode),
-                    take and "hidden" or "back")
-                chatTaken = take
-            end
-            if take then
-                chatAcornFrame:Hide()
-            else
-                chatAcornFrame:Show()
-            end
-            Acorns:SetChatMode(dbChat.mode)  
-        end
-        local function ApplyObjectivesTakeover()
-            local take = ThugUI.ControllerMode:Uses("objectives")
-            if take ~= objTaken then
-                Log("objectives takeover %s; tracker saved as %s, acorn %s",
-                    take and "starts" or "ends", dbObj.visible == false and "hidden" or "shown",
-                    take and "hidden" or "back")
-                objTaken = take
-            end
-            objectivesRevealed = false
-            if take then
-                objectivesAcornFrame:Hide()
-                
-                
-                ApplyControllerGhost(true)
-                Acorns:HookShortcutsObjectives()
-            else
-                objectivesAcornFrame:Show()
-                ClearControllerGhost()
-                ApplyObjectivesVisibility(dbObj.visible ~= false)
-            end
-        end
-        ThugUI.ControllerMode:RegisterCallback(function()
-            ApplyChatTakeover()
-            ApplyObjectivesTakeover()
-        end)
-        ThugUI.ControllerMode:RegisterFeatureCallback("chat", ApplyChatTakeover)
-        ThugUI.ControllerMode:RegisterFeatureCallback("objectives", ApplyObjectivesTakeover)
-    end
-
     
     
-    if EventRegistry and EventRegistry.RegisterCallback then
-        EventRegistry:RegisterCallback("Gamepad.RefreshFrameFocus", function()
-            Acorns:OnGamepadFocusChanged()
-        end, Acorns)
-    end
+    
 
     
     
@@ -1669,10 +1398,6 @@ function Acorns:Initialize()
         end
 
         if event == "PLAYER_ENTERING_WORLD" then
-            
-            if ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("objectives") then
-                Acorns:HookShortcutsObjectives()
-            end
             Acorns:SetChatMode(dbChat.mode or CHAT_MODE_NORMAL)
             Acorns:SetObjectivesVisibility(dbObj.visible ~= false)
             Acorns:UpdateAnchors()
@@ -1728,21 +1453,6 @@ function Acorns:Initialize()
             end
         end, Acorns)
 
-        
-        
-        
-        
-        
-        
-        
-        
-        EventRegistry:RegisterCallback("UI.TopLevelParentShown", function()
-            if C_Timer and C_Timer.After then
-                C_Timer.After(0, ScheduleObjectivesReassert)
-            else
-                ScheduleObjectivesReassert()
-            end
-        end, Acorns)
     end
 
     

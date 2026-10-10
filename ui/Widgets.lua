@@ -26,6 +26,11 @@ ThugUI.Widgets = W
 
 
 
+local function Paint(obj, role, how) return ThugUI.Theme:Paint(obj, role, how) end
+W.Paint = Paint
+
+
+
 
 local sliderSerial = 0
 local function NextSliderName()
@@ -33,45 +38,91 @@ local function NextSliderName()
     return "ThugUI_Slider" .. sliderSerial
 end
 
-local FONT_HEADER  = "GameFontNormalLarge"
-local FONT_SECTION = "GameFontNormal"
-local FONT_LABEL   = "GameFontHighlight"
-local FONT_NOTE    = "GameFontDisable"
+local FONT_HEADER  = ThugUI.Theme:Font("GameFontNormalLarge")
+local FONT_SECTION = ThugUI.Theme:Font("GameFontNormal")
+local FONT_LABEL   = ThugUI.Theme:Font("GameFontHighlight")
+local FONT_NOTE    = ThugUI.Theme:Font("GameFontDisable")
 
-local GOLD = {1.0, 0.82, 0.0}
 
 
 local function ApplyDarkBorder(frame)
     local bg = frame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0.1, 0.1, 0.1, 0.9)
+    Paint(bg, "controlFill", "fill")
     
     local t = frame:CreateTexture(nil, "BORDER")
-    t:SetColorTexture(0.3, 0.3, 0.3, 1)
+    Paint(t, "controlBorder", "fill")
     t:SetPoint("TOPLEFT", 0, 0)
     t:SetPoint("TOPRIGHT", 0, 0)
     t:SetHeight(1)
     
     local b = frame:CreateTexture(nil, "BORDER")
-    b:SetColorTexture(0.3, 0.3, 0.3, 1)
+    Paint(b, "controlBorder", "fill")
     b:SetPoint("BOTTOMLEFT", 0, 0)
     b:SetPoint("BOTTOMRIGHT", 0, 0)
     b:SetHeight(1)
     
     local l = frame:CreateTexture(nil, "BORDER")
-    l:SetColorTexture(0.3, 0.3, 0.3, 1)
+    Paint(l, "controlBorder", "fill")
     l:SetPoint("TOPLEFT", 0, -1)
     l:SetPoint("BOTTOMLEFT", 0, 1)
     l:SetWidth(1)
     
     local r = frame:CreateTexture(nil, "BORDER")
-    r:SetColorTexture(0.3, 0.3, 0.3, 1)
+    Paint(r, "controlBorder", "fill")
     r:SetPoint("TOPRIGHT", 0, -1)
     r:SetPoint("BOTTOMRIGHT", 0, 1)
     r:SetWidth(1)
 end
 
-local TEAL = {0.0, 1.0, 0.8}
+
+local TAB_HEIGHT = 22
+local TAB_GAP = 4
+
+function W.CreateTabButton(parent, text, kind)
+    
+    local role, selRole = "tab", "tabSelected"
+    if kind == "subTab" then role, selRole = "subTab", "subTabSelected" end
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetHeight(TAB_HEIGHT)
+
+    local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    Paint(bg, "tabFill", "fill")
+
+    local sel = btn:CreateTexture(nil, "BORDER")
+    sel:SetAllPoints()
+    Paint(sel, "tabSelectedFill", "fill")
+    sel:Hide()
+    btn.selectedBG = sel
+
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    Paint(hl, "tabHighlight", "fill")
+
+    local accent = btn:CreateTexture(nil, "ARTWORK")
+    accent:SetPoint("BOTTOMLEFT")
+    accent:SetPoint("BOTTOMRIGHT")
+    accent:SetHeight(2)
+    Paint(accent, "tabAccent", "fill")
+    accent:Hide()
+    btn.accent = accent
+
+    local label = Paint(btn:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), role)
+    label:SetPoint("CENTER")
+    label:SetText(text)
+    btn.label = label
+    btn.labelText = text
+    btn:SetWidth((label:GetStringWidth() or 60) + 24)
+
+    function btn:SetSelected(selected)
+        self.selectedBG:SetShown(selected)
+        self.accent:SetShown(selected)
+        Paint(self.label, selected and selRole or role)
+    end
+    btn:SetSelected(false)
+    return btn
+end
 
 
 
@@ -176,12 +227,12 @@ local function UpdateList()
             row:Show()
             row.text:SetText(data.text)
             if data.isTitle then
-                row.text:SetTextColor(unpack(GOLD))
+                Paint(row.text, "listTitle")
                 row.text:SetPoint("LEFT", 8, 0)
                 row.check:Hide()
                 row.isTitle = true
             else
-                row.text:SetTextColor(1, 1, 1)
+                Paint(row.text, "listItem")
                 row.text:SetPoint("LEFT", 20, 0)
                 row.check:SetShown(data.checked)
                 row.isTitle = false
@@ -191,7 +242,27 @@ local function UpdateList()
             row:Hide()
         end
     end
+
+    
+    
+    
+    if not dropdownList.moreUp then
+        local up = dropdownList:CreateTexture(nil, "OVERLAY")
+        up:SetTexture("Interface\\Buttons\\Arrow-Up-Up")
+        up:SetSize(14, 14)
+        up:SetPoint("TOPRIGHT", -4, -3)
+        local down = dropdownList:CreateTexture(nil, "OVERLAY")
+        down:SetTexture("Interface\\Buttons\\Arrow-Down-Up")
+        down:SetSize(14, 14)
+        down:SetPoint("BOTTOMRIGHT", -4, 3)
+        Paint(up, "accent", "vertex")
+        Paint(down, "accent", "vertex")
+        dropdownList.moreUp, dropdownList.moreDown = up, down
+    end
+    dropdownList.moreUp:SetShown(listOffset > 0)
+    dropdownList.moreDown:SetShown(listOffset + maxVisible < numData)
 end
+W.ListState = function() return listOffset, #listData, dropdownList end
 
 function W.ShowList(anchor, rows, width)
     if not ThugUI.CombatClose:Allow("dropdown") then return end
@@ -236,10 +307,10 @@ function W.ShowList(anchor, rows, width)
             
             local hl = row:CreateTexture(nil, "HIGHLIGHT")
             hl:SetAllPoints()
-            hl:SetColorTexture(1, 1, 1, 0.1)
+            Paint(hl, "controlHighlight", "fill")
             row:SetHighlightTexture(hl)
             
-            local text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+            local text = Paint(row:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontHighlightSmall")), "listItem")
             text:SetPoint("LEFT", 20, 0)
             row.text = text
             
@@ -294,7 +365,7 @@ function W.CreateDropdown(parent, width, options, get, set)
     
     ApplyDarkBorder(dd)
     
-    local text = dd:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    local text = Paint(dd:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontHighlightSmall")), "value")
     text:SetPoint("LEFT", 8, 0)
     text:SetPoint("RIGHT", -20, 0)
     text:SetJustifyH("LEFT")
@@ -307,7 +378,7 @@ function W.CreateDropdown(parent, width, options, get, set)
     
     local hl = dd:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.1)
+    Paint(hl, "controlHighlight", "fill")
     
     dd:HookScript("OnHide", function(self)
         if listAnchor == self then
@@ -339,6 +410,12 @@ function W.CreateDropdown(parent, width, options, get, set)
         W.ShowList(self, rows, self:GetWidth())
     end)
 
+    
+    function dd:Choose(value)
+        set(value)
+        self:Refresh()
+    end
+
     function dd:Refresh()
         self.text:SetText(OptionText(options, get()) or "")
     end
@@ -352,6 +429,69 @@ function W.CreateDropdown(parent, width, options, get, set)
     
     dd:Refresh()
     return dd
+end
+
+
+
+
+
+
+
+
+
+
+local PANEL_BUTTON = "Interface\\Buttons\\UI-Panel-Button-"
+local PANEL_BUTTON_COORDS = {
+    Left = { 0, 0.09375, 0, 0.6875 },
+    Middle = { 0.09375, 0.53125, 0, 0.6875 },
+    Right = { 0.53125, 0.625, 0, 0.6875 },
+}
+
+function W.CreateStateButton(parent, text)
+    local b = CreateFrame("Button", nil, parent)
+    b:SetHeight(22)
+    for _, part in ipairs({ "Left", "Middle", "Right" }) do
+        local t = b:CreateTexture(nil, "BACKGROUND")
+        local c = PANEL_BUTTON_COORDS[part]
+        t:SetTexCoord(c[1], c[2], c[3], c[4])
+        b[part] = t
+    end
+    b.Left:SetSize(12, 22)
+    b.Left:SetPoint("TOPLEFT")
+    b.Left:SetPoint("BOTTOMLEFT")
+    b.Right:SetSize(12, 22)
+    b.Right:SetPoint("TOPRIGHT")
+    b.Right:SetPoint("BOTTOMRIGHT")
+    b.Middle:SetPoint("TOPLEFT", b.Left, "TOPRIGHT")
+    b.Middle:SetPoint("BOTTOMRIGHT", b.Right, "BOTTOMLEFT")
+    local hl = b:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetTexture("Interface\\Buttons\\UI-Panel-Button-Highlight")
+    hl:SetBlendMode("ADD")
+    hl:SetTexCoord(0, 0.625, 0, 0.6875)
+    hl:SetAllPoints()
+    local label = Paint(b:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "disabled")
+    label:SetPoint("CENTER")
+    label:SetText(text)
+    b.label = label
+    local w = label.GetStringWidth and label:GetStringWidth() or 0
+    if type(w) ~= "number" or w <= 0 then w = #text * 7 end
+    b:SetWidth(math.max(60, w + 28))
+
+    local function PaintArt(self, pressed)
+        local file = PANEL_BUTTON .. (self.active and "Up" or "Disabled")
+        if pressed then file = PANEL_BUTTON .. (self.active and "Down" or "Disabled-Down") end
+        for _, part in ipairs({ "Left", "Middle", "Right" }) do self[part]:SetTexture(file) end
+        self.label:SetFontObject(self.active and ThugUI.Theme:Font("GameFontHighlight") or ThugUI.Theme:Font("GameFontDisable"))
+        Paint(self.label, self.active and "label" or "disabled")
+    end
+    function b:SetActive(active)
+        self.active = active and true or false
+        PaintArt(self, false)
+    end
+    b:SetScript("OnMouseDown", function(self) PaintArt(self, true) end)
+    b:SetScript("OnMouseUp", function(self) PaintArt(self, false) end)
+    b:SetActive(false)
+    return b
 end
 
 
@@ -377,20 +517,20 @@ function W.ShowColorEditor(anchor, r, g, b, onChange, title)
         colorEditor:SetScript("OnDragStart", function(self) self:StartMoving() end)
         colorEditor:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
         
-        local titleText = colorEditor:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        local titleText = Paint(colorEditor:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontHighlight")), "label")
         titleText:SetPoint("TOP", 0, -10)
         colorEditor.title = titleText
         
         local preview = colorEditor:CreateTexture(nil, "ARTWORK")
         preview:SetSize(40, 40)
         preview:SetPoint("TOPLEFT", 15, -35)
-        preview:SetColorTexture(1, 1, 1)
+        preview:SetColorTexture(1, 1, 1) 
         colorEditor.preview = preview
         
         local previewBorder = colorEditor:CreateTexture(nil, "BACKGROUND")
         previewBorder:SetPoint("TOPLEFT", preview, "TOPLEFT", -1, 1)
         previewBorder:SetPoint("BOTTOMRIGHT", preview, "BOTTOMRIGHT", 1, -1)
-        previewBorder:SetColorTexture(0.5, 0.5, 0.5)
+        Paint(previewBorder, "swatchBorder", "fill")
 
         local function CreateEditorSlider(name, labelText, yOff)
             local slider = CreateFrame("Slider", name, colorEditor, "OptionsSliderTemplate")
@@ -423,7 +563,7 @@ function W.ShowColorEditor(anchor, r, g, b, onChange, title)
             local nr = sliderR:GetValue()
             local ng = sliderG:GetValue()
             local nb = sliderB:GetValue()
-            preview:SetVertexColor(nr, ng, nb)
+            preview:SetVertexColor(nr, ng, nb) 
             if colorEditor.onChange then
                 colorEditor.onChange(nr, ng, nb)
             end
@@ -460,12 +600,12 @@ function W.ShowColorEditor(anchor, r, g, b, onChange, title)
             
             local tex = btn:CreateTexture(nil, "ARTWORK")
             tex:SetAllPoints()
-            tex:SetColorTexture(color[1], color[2], color[3])
+            tex:SetColorTexture(color[1], color[2], color[3]) 
             
             local bg = btn:CreateTexture(nil, "BACKGROUND")
             bg:SetPoint("TOPLEFT", -1, 1)
             bg:SetPoint("BOTTOMRIGHT", 1, -1)
-            bg:SetColorTexture(0.5, 0.5, 0.5)
+            Paint(bg, "swatchBorder", "fill")
             
             btn:SetScript("OnClick", function()
                 colorEditor.isUpdating = true
@@ -512,7 +652,7 @@ function W.ShowColorEditor(anchor, r, g, b, onChange, title)
     colorEditor.sliders.r:SetValue(colorEditor.originalR)
     colorEditor.sliders.g:SetValue(colorEditor.originalG)
     colorEditor.sliders.b:SetValue(colorEditor.originalB)
-    colorEditor.preview:SetVertexColor(colorEditor.originalR, colorEditor.originalG, colorEditor.originalB)
+    colorEditor.preview:SetVertexColor(colorEditor.originalR, colorEditor.originalG, colorEditor.originalB) 
     colorEditor.title:SetText(title or "Colour")
     colorEditor.isUpdating = false
     
@@ -529,15 +669,15 @@ function W.CreateColorSwatch(parent, get, set)
     local border = button:CreateTexture(nil, "BACKGROUND")
     border:SetPoint("TOPLEFT", -1, 1)
     border:SetPoint("BOTTOMRIGHT", 1, -1)
-    border:SetColorTexture(0.4, 0.4, 0.4)
+    Paint(border, "swatchBorder", "fill")
 
     local swatch = button:CreateTexture(nil, "ARTWORK")
     swatch:SetAllPoints()
-    swatch:SetColorTexture(1, 1, 1)
+    swatch:SetColorTexture(1, 1, 1) 
 
     function button:Refresh()
         local r, g, b = get()
-        swatch:SetVertexColor(r or 1, g or 1, b or 1)
+        swatch:SetVertexColor(r or 1, g or 1, b or 1) 
     end
 
     button:SetScript("OnClick", function(self)
@@ -605,7 +745,7 @@ function Panel:RowLabel(text, o, height)
         self:Label(text, { indent = o.indent, sameLine = o.sameLine, yAdjust = o.yAdjust })
         return nil
     end
-    local lbl = self.parent:CreateFontString(nil, "OVERLAY", FONT_LABEL)
+    local lbl = Paint(self.parent:CreateFontString(nil, "OVERLAY", FONT_LABEL), self:TextRole())
     lbl:SetWidth(LABEL_WIDTH)
     lbl:SetJustifyH("LEFT")
     lbl:SetText(text)
@@ -654,8 +794,38 @@ end
 
 
 
+
+
+
+
+function Panel:ActiveIf(fn)
+    self.activeIf = fn
+    if fn and not self.gated then self.gated = {} end
+end
+
+function Panel:ApplyGates()
+    for _, g in ipairs(self.gated or {}) do
+        local on = g.fn() and true or false
+        local f = g.frame
+        f:SetAlpha(on and 1 or 0.35)
+        if f.SetEnabled then f:SetEnabled(on)
+        elseif f.EnableMouse and f.GetObjectType and f:GetObjectType() ~= "FontString" then f:EnableMouse(on) end
+        if f.valueBox and f.valueBox.SetEnabled then f.valueBox:SetEnabled(on) end
+    end
+end
+
+
+
+function Panel:TextRole()
+    if self.currentPartRole then return "label:" .. self.currentPartRole end
+    return "label"
+end
+
 function Panel:Place(frame, height, o)
     o = o or {}
+    if self.activeIf then
+        self.gated[#self.gated + 1] = { frame = frame, fn = self.activeIf }
+    end
     local indent = o.indent or 0
 
     if o.sameLine then
@@ -712,6 +882,7 @@ function Panel:Refresh()
     for _, widget in ipairs(self.widgets) do
         widget:Refresh()
     end
+    self:ApplyGates()
 end
 
 function Panel:GetHeight()
@@ -746,11 +917,12 @@ function Panel:Index(text, frame, kind)
         
         
         tab = self.currentTab,
+        subTab = self.currentSubTab,
     })
 end
 
 function Panel:Header(text)
-    local fs = self.parent:CreateFontString(nil, "ARTWORK", FONT_HEADER)
+    local fs = Paint(self.parent:CreateFontString(nil, "ARTWORK", FONT_HEADER), "pageTitle")
     fs:SetText(text)
     self:Place(fs, 22, { gap = 0 })
     self:Index(text, fs, "section")
@@ -763,16 +935,18 @@ end
 
 
 function Panel:Section(text)
+    if self.FinalizeSubTabs then self:FinalizeSubTabs() end
+    self.currentPartRole = nil
     if self.tabHandler then
         local tab = self.tabHandler(self, text)
         self:Index(text, tab.button, "section")
         self.currentSection = text
+        self.inTabbedFrameSection = false
         return tab.button.label
     end
     self:Gap(12)
-    local fs = self.parent:CreateFontString(nil, "ARTWORK", FONT_SECTION)
+    local fs = Paint(self.parent:CreateFontString(nil, "ARTWORK", FONT_SECTION), "section")
     fs:SetText(text)
-    fs:SetTextColor(unpack(GOLD))
     self:Place(fs, 16, { gap = 0 })
     self:Index(text, fs, "section")
     self.currentSection = text
@@ -781,7 +955,7 @@ function Panel:Section(text)
     
     
     local line = self.parent:CreateTexture(nil, "ARTWORK")
-    line:SetColorTexture(0.5, 0.5, 0.5, 0.5)
+    Paint(line, "ruleSection", "fill")
     line:SetHeight(1)
     line:SetPoint("LEFT", fs, "RIGHT", 6, 0)
     line:SetWidth(math.max(1, self.width - fs:GetStringWidth() - 6))
@@ -793,7 +967,7 @@ end
 
 function Panel:Note(text, o)
     o = o or {}
-    local fs = self.parent:CreateFontString(nil, "ARTWORK", FONT_NOTE)
+    local fs = Paint(self.parent:CreateFontString(nil, "ARTWORK", FONT_NOTE), "note")
     fs:SetWidth(o.width or (self.width - (o.indent or 0)))
     fs:SetJustifyH("LEFT")
     fs:SetText(text)
@@ -802,7 +976,7 @@ function Panel:Note(text, o)
 end
 
 function Panel:Label(text, o)
-    local fs = self.parent:CreateFontString(nil, "ARTWORK", FONT_LABEL)
+    local fs = Paint(self.parent:CreateFontString(nil, "ARTWORK", FONT_LABEL), self:TextRole())
     fs:SetText(text)
     self:Place(fs, 16, o)
     return fs
@@ -815,7 +989,7 @@ function Panel:Checkbox(opts)
     local cb = CreateFrame("CheckButton", nil, self.parent, "UICheckButtonTemplate")
     cb:SetSize(24, 24)
 
-    local label = cb:CreateFontString(nil, "OVERLAY", FONT_LABEL)
+    local label = Paint(cb:CreateFontString(nil, "OVERLAY", FONT_LABEL), self:TextRole())
     label:SetPoint("LEFT", cb, "RIGHT", 4, 0)
     label:SetText(opts.label)
     
@@ -948,7 +1122,7 @@ function Panel:Slider(opts)
     else
         
         
-        local rowLabel = self.parent:CreateFontString(nil, "OVERLAY", FONT_LABEL)
+        local rowLabel = Paint(self.parent:CreateFontString(nil, "OVERLAY", FONT_LABEL), self:TextRole())
         rowLabel:SetWidth(LABEL_WIDTH)
         rowLabel:SetJustifyH("LEFT")
         rowLabel:SetText(opts.label)
@@ -978,6 +1152,82 @@ function Panel:Dropdown(opts)
         width = opts.width or 160,
     })
     return self:Register(dd)
+end
+
+
+
+
+
+
+local MODIFIER_KEYS = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true }
+W.MODIFIER_KEYS = MODIFIER_KEYS
+
+function W.BindingFromKey(key)
+    local prefix = ""
+    if IsAltKeyDown and IsAltKeyDown() then prefix = prefix .. "ALT-" end
+    if IsControlKeyDown and IsControlKeyDown() then prefix = prefix .. "CTRL-" end
+    if IsShiftKeyDown and IsShiftKeyDown() then prefix = prefix .. "SHIFT-" end
+    return prefix .. key
+end
+
+function Panel:KeyBind(opts)
+    if opts.label then
+        local gap = self:RowLabel(opts.label, { indent = opts.indent, yAdjust = -6 }, 26)
+        opts = setmetatable({ sameLine = true, gap = gap }, { __index = opts })
+    end
+    local width = opts.width or 160
+    local btn = CreateFrame("Button", nil, self.parent)
+    btn:SetSize(width, 24)
+    ApplyDarkBorder(btn)
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    Paint(hl, "controlHighlight", "fill")
+    local text = Paint(btn:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontHighlightSmall")), "value")
+    text:SetPoint("CENTER")
+    btn.text = text
+    btn.labelText = opts.label
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+    function btn:Refresh()
+        if self.listening then
+            self.text:SetText("Press a key...")
+        else
+            local k = opts.get()
+            self.text:SetText((type(k) == "string" and k ~= "") and k or "Not set")
+        end
+    end
+    local function Stop(self)
+        self.listening = false
+        self:EnableKeyboard(false)
+        self:Refresh()
+    end
+    btn:SetScript("OnClick", function(self, mouseButton)
+        if mouseButton == "RightButton" then
+            Stop(self)
+            opts.set(nil)
+            self:Refresh()
+            return
+        end
+        self.listening = true
+        self:EnableKeyboard(true)
+        self:Refresh()
+    end)
+    btn:SetScript("OnKeyDown", function(self, key)
+        if not self.listening then return end
+        if key == "ESCAPE" then Stop(self) return end
+        if MODIFIER_KEYS[key] then return end
+        local binding = W.BindingFromKey(key)
+        Stop(self)
+        opts.set(binding)
+        self:Refresh()
+    end)
+    btn:SetScript("OnHide", function(self) if self.listening then Stop(self) end end)
+    W.AttachTooltip(btn, opts.label, (opts.tooltip and (opts.tooltip .. " ") or "")
+        .. "Click, then press the key. Right-click clears it.")
+    self:Index(opts.label, btn, "control")
+    self:Place(btn, 26, { indent = opts.indent, sameLine = opts.sameLine, gap = opts.gap, width = width })
+    btn:Refresh()
+    return self:Register(btn)
 end
 
 
@@ -1065,15 +1315,69 @@ end
 
 
 
+function Panel:TextArea(opts)
+    if opts.label then self:Label(opts.label) end
+    local width, height = opts.width or self.width - 20, opts.height or 90
+    local holder = CreateFrame("Frame", nil, self.parent)
+    holder:SetSize(width, height)
+    ApplyDarkBorder(holder)
+    local scroll = CreateFrame("ScrollFrame", nil, holder, "UIPanelScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 6, -6)
+    scroll:SetPoint("BOTTOMRIGHT", -26, 6)
+    local edit = CreateFrame("EditBox", nil, scroll)
+    edit:SetMultiLine(true)
+    edit:SetAutoFocus(false)
+    edit:SetFontObject(ThugUI.Theme:Font("ChatFontNormal"))
+    edit:SetWidth(width - 36)
+    edit:SetHeight(height)
+    Paint(edit, "value")
+    scroll:SetScrollChild(edit)
+    holder.edit = edit
+    holder.labelText = opts.label
+    edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    edit:SetScript("OnTextChanged", function(self, userInput)
+        if not userInput then return end
+        if opts.readOnly then
+            holder:Refresh()
+            self:HighlightText()
+        elseif opts.onTextChanged then
+            opts.onTextChanged(self:GetText())
+        end
+    end)
+    
+    if opts.readOnly then
+        edit:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+    end
+    holder:EnableMouse(true)
+    holder:SetScript("OnMouseDown", function() edit:SetFocus() end)
+    function holder:Refresh()
+        if opts.get then self.edit:SetText(opts.get() or "") end
+    end
+    function holder:SetText(t) self.edit:SetText(t or "") end
+    function holder:GetText() return self.edit:GetText() end
+    holder:Refresh()
+    if opts.tooltip then W.AttachTooltip(holder, opts.label, opts.tooltip) end
+    self:Index(opts.label, holder, "control")
+    self:Place(holder, height + 4, { width = width })
+    return self:Register(holder)
+end
+
+
+
+
 
 function Panel:FrameSection(opts)
+    if self.FinalizeSubTabs then self:FinalizeSubTabs() end
     
     
-    if self.tabHandler then self.tabHandler(self, opts.title) end
+    if self.tabHandler then
+        self.tabHandler(self, opts.title)
+        self.inTabbedFrameSection = true
+    end
     self.openCheckboxPair = false
     self:Gap(12)
     local band = self.parent:CreateTexture(nil, "BACKGROUND")
-    band:SetColorTexture(1, 1, 1, 0.04)
+    Paint(band, "frameSectionFill", "fill")
     band:SetHeight(30)
     
     
@@ -1081,9 +1385,8 @@ function Panel:FrameSection(opts)
     band:SetPoint("TOPLEFT", self.parent, "TOPLEFT", self.originX - 4, self.cursorY)
     band:SetWidth(self.width + 8)
 
-    local title = self.parent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local title = Paint(self.parent:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontNormalLarge")), "section")
     title:SetText(opts.title)
-    title:SetTextColor(unpack(GOLD))
     title:SetPoint("LEFT", band, "LEFT", 12, 0)
     
     
@@ -1094,8 +1397,9 @@ function Panel:FrameSection(opts)
     if atlasInfo then
         divider:SetAtlas("Options_HorizontalDivider")
         divider:SetHeight(atlasInfo.height)
+        Paint(divider, "frameSectionDivider", "vertex")
     else
-        divider:SetColorTexture(unpack(GOLD))
+        Paint(divider, "ruleFrameSection", "fill")
         divider:SetHeight(1)
     end
     divider:SetPoint("TOPLEFT", band, "BOTTOMLEFT", 0, 0)
@@ -1120,7 +1424,7 @@ function Panel:FrameSection(opts)
     if opts.unlock then
         local cb = CreateFrame("CheckButton", nil, self.parent, "UICheckButtonTemplate")
         cb:SetSize(24, 24)
-        local lbl = cb:CreateFontString(nil, "OVERLAY", FONT_LABEL)
+        local lbl = Paint(cb:CreateFontString(nil, "OVERLAY", FONT_LABEL), "label")
         lbl:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         lbl:SetText("Unlock")
         cb.labelText = "Unlock"
@@ -1144,7 +1448,7 @@ function Panel:FrameSection(opts)
     if opts.enabled then
         local cb = CreateFrame("CheckButton", nil, self.parent, "UICheckButtonTemplate")
         cb:SetSize(24, 24)
-        local lbl = cb:CreateFontString(nil, "OVERLAY", FONT_LABEL)
+        local lbl = Paint(cb:CreateFontString(nil, "OVERLAY", FONT_LABEL), "label")
         lbl:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         lbl:SetText("Enabled")
         cb.labelText = "Enabled"
@@ -1167,6 +1471,7 @@ function Panel:FrameSection(opts)
     self.cursorY = self.cursorY - 30 - (atlasInfo and atlasInfo.height or 1) - 12
     self.rowTopY = self.cursorY
     self.partIndex = 0
+    self.currentPartRole = nil
     return title
 end
 
@@ -1186,21 +1491,26 @@ function Panel:Part(name)
     
     
     self:Gap(18)
-    local fs = self.parent:CreateFontString(nil, "ARTWORK", FONT_SECTION)
+    
+    
+    
+    local partRole = ThugUI.Theme.PART_ROLE[name]
+    self.currentPartRole = partRole
+    local fs = Paint(self.parent:CreateFontString(nil, "ARTWORK", FONT_SECTION), partRole)
     fs:SetText(name)
-    fs:SetTextColor(unpack(GOLD))
     self:Place(fs, 16, { gap = 0 })
     self:Index(name, fs, "control")
-    self:Rule(fs, 0.85, 0.7, 0.2, 0.5)
+    self:Rule(fs, partRole, 0.5)
     self:Gap(4)
     return fs
 end
 
 
 
-function Panel:Rule(fs, r, g, b, a)
+function Panel:Rule(fs, role, alpha)
     local line = self.parent:CreateTexture(nil, "ARTWORK")
-    line:SetColorTexture(r, g, b, a)
+    Paint(line, role, "fill")
+    if alpha then line:SetAlpha(alpha) end
     line:SetHeight(1)
     line:SetPoint("LEFT", fs, "RIGHT", 6, 0)
     line:SetWidth(math.max(1, self.width - (fs:GetStringWidth() or 0) - 6))
@@ -1213,14 +1523,248 @@ end
 function Panel:Group(name)
     self.openCheckboxPair = false
     self:Gap(10)
-    local fs = self.parent:CreateFontString(nil, "ARTWORK", FONT_LABEL)
+    
+    
+    
+    local groupRole = self.currentPartRole and ("group:" .. self.currentPartRole) or "group"
+    local fs = Paint(self.parent:CreateFontString(nil, "ARTWORK", FONT_LABEL), groupRole)
     fs:SetText(name)
-    fs:SetTextColor(0.85, 0.85, 0.85)
     self:Place(fs, 14, { gap = 0, indent = 4 })
     self:Index(name, fs, "control")
-    self:Rule(fs, 0.5, 0.5, 0.5, 0.35)
+    if self.currentPartRole then self:Rule(fs, groupRole, 0.5) else self:Rule(fs, "ruleGroup") end
     self:Gap(2)
     return fs
+end
+
+
+
+
+
+
+
+
+
+
+
+
+local SUBTAB_ROW = 26   
+
+
+
+
+function W.SelectSubTab(tabState, index)
+    local subTabs = tabState.subTabs
+    if not subTabs or not subTabs[index] then return end
+    for i, st in ipairs(subTabs) do
+        st.host:SetShown(i == index)
+        st.button:SetSelected(i == index)
+    end
+    tabState.activeSubTab = index
+    if tabState.pageDef then
+        tabState.pageDef.subTabSelections = tabState.pageDef.subTabSelections or {}
+        tabState.pageDef.subTabSelections[tabState.index] = index
+    end
+    
+    
+    if tabState.bodyHost then
+        local h = subTabs[index].height or 0
+        tabState.contentHeight = h
+        tabState.bodyHost:SetHeight(math.max(h, tabState.bodyMinHeight or 0))
+        if tabState.scroll and tabState.scroll.SetVerticalScroll then tabState.scroll:SetVerticalScroll(0) end
+        return
+    end
+    local h = (tabState.subBodyTop or 0) + (subTabs[index].height or 0)
+    tabState.contentHeight = h
+    tabState.host:SetHeight(math.max(h, tabState.minHeight or 0))
+end
+
+function Panel:SubSection(title)
+    
+    
+    
+    
+    if not self.partIndex then
+        error("ThugUI: SubSection outside a FrameSection")
+    end
+    if not self.inTabbedFrameSection or not self.currentTab then
+        local fs = self:Group(title)
+        self.partIndex = 0
+    self.currentPartRole = nil
+        return fs
+    end
+    local tabState = self.currentTab
+
+    if not tabState.subTabs then
+        tabState.subTabs = {}
+        tabState.subTabBarY = self.cursorY
+        local bar = CreateFrame("Frame", nil, tabState.host)
+        bar:SetSize(self.width, SUBTAB_ROW)
+        bar:SetPoint("TOPLEFT", tabState.host, "TOPLEFT", self.originX, self.cursorY)
+        tabState.subTabBar = bar
+        local rule = tabState.host:CreateTexture(nil, "ARTWORK")
+        Paint(rule, "ruleSubTabs", "fill")
+        rule:SetHeight(1)
+        tabState.subTabRule = rule
+    else
+        
+        tabState.subTabs[#tabState.subTabs].height = self:GetHeight()
+    end
+
+    local body = CreateFrame("Frame", nil, tabState.host)
+    body:SetWidth(self.originX * 2 + self.width)
+    body:SetHeight(1)
+    body:Hide()
+    local subTab = { title = title, host = body, index = #tabState.subTabs + 1, group = tabState }
+    tabState.subTabs[subTab.index] = subTab
+
+    subTab.button = W.CreateTabButton(tabState.subTabBar, title, "subTab")
+    subTab.button:SetScript("OnClick", function() W.SelectSubTab(tabState, subTab.index) end)
+
+    
+    self.parent = body
+    self.cursorY, self.rowTopY = self.originY, self.originY
+    self.lastX, self.lastW = self.originX, 0
+    self.openCheckboxPair = false
+    self.partIndex = 0
+    self.currentPartRole = nil
+    self.currentSubTab = subTab
+    
+    self:Index(title, subTab.button, "subtab")
+    return subTab.button.label
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function Panel:Switch(o)
+    self.openCheckboxPair = false
+    if o.label then self:Group(o.label) end
+    local row = CreateFrame("Frame", nil, self.parent)
+    row:SetSize(self.width, TAB_HEIGHT)
+    self:Place(row, TAB_HEIGHT, { gap = 6 })
+    local sw = { options = o.options, get = o.get, set = o.set, cases = {}, buttons = {}, row = row }
+    local x = 0
+    for _, opt in ipairs(o.options) do
+        local btn = W.CreateTabButton(row, opt.text, "subTab")
+        btn:SetPoint("TOPLEFT", row, "TOPLEFT", x, 0)
+        x = x + btn:GetWidth() + 4
+        btn.value = opt.value
+        local panel = self
+        btn:SetScript("OnClick", function()
+            o.set(opt.value)
+            panel:Refresh()
+        end)
+        self:Index(opt.text, btn, "control")
+        sw.buttons[#sw.buttons + 1] = btn
+    end
+    
+    function row:SetEnabled(on)
+        for _, b in ipairs(sw.buttons) do if b.SetEnabled then b:SetEnabled(on) end end
+    end
+    function sw:Refresh()
+        local v = self.get()
+        for _, b in ipairs(self.buttons) do b:SetSelected(b.value == v) end
+        for value, body in pairs(self.cases) do body:SetShown(value == v) end
+    end
+    
+    sw.saved = { parent = self.parent, cursorY = self.cursorY - 6 }
+    self.switchStack = self.switchStack or {}
+    self.switchStack[#self.switchStack + 1] = sw
+    self:Register(sw)
+    return sw
+end
+
+
+function Panel:Case(value)
+    local sw = self.switchStack and self.switchStack[#self.switchStack]
+    if not sw then error("ThugUI: Case outside a Switch") end
+    if sw.current then sw.current.height = -self.cursorY end
+    local body = CreateFrame("Frame", nil, sw.saved.parent)
+    body:SetWidth(self.originX * 2 + self.width)
+    body:SetHeight(1)
+    body:SetPoint("TOPLEFT", sw.saved.parent, "TOPLEFT", 0, sw.saved.cursorY)
+    body:Hide()
+    sw.cases[value] = body
+    sw.current = body
+    self.parent = body
+    self.cursorY, self.rowTopY = 0, 0
+    self.lastX, self.lastW = self.originX, 0
+    self.openCheckboxPair = false
+    return body
+end
+
+
+function Panel:EndSwitch()
+    local sw = self.switchStack and table.remove(self.switchStack)
+    if not sw then error("ThugUI: EndSwitch without a Switch") end
+    if sw.current then sw.current.height = -self.cursorY end
+    local tallest = 0
+    for _, body in pairs(sw.cases) do
+        local h = body.height or 0
+        body:SetHeight(math.max(h, 1))
+        if h > tallest then tallest = h end
+    end
+    self.parent = sw.saved.parent
+    self.cursorY = sw.saved.cursorY - tallest
+    self.rowTopY = self.cursorY
+    self.lastX, self.lastW = self.originX, 0
+    self.openCheckboxPair = false
+    sw.current = nil
+    sw:Refresh()
+    return sw
+end
+
+
+
+
+
+function Panel:FinalizeSubTabs()
+    local tabState = self.currentTab
+    if not tabState or not tabState.subTabs or tabState.subTabsFinalized then return end
+    tabState.subTabsFinalized = true
+    tabState.subTabs[#tabState.subTabs].height = self:GetHeight()
+
+    local x, row = 0, 0
+    for _, st in ipairs(tabState.subTabs) do
+        local w = st.button:GetWidth()
+        if x > 0 and x + w > self.width then
+            x, row = 0, row + 1
+        end
+        st.button:ClearAllPoints()
+        st.button:SetPoint("TOPLEFT", tabState.subTabBar, "TOPLEFT", x, -(row * SUBTAB_ROW))
+        x = x + w + 4
+    end
+    local barH = (row + 1) * SUBTAB_ROW
+    tabState.subTabBar:SetHeight(barH)
+
+    local ruleY = tabState.subTabBarY - barH
+    tabState.subTabRule:SetPoint("TOPLEFT", tabState.host, "TOPLEFT", self.originX - 4, ruleY)
+    tabState.subTabRule:SetWidth(self.width + 8)
+
+    local bodyY = ruleY - 4
+    for _, st in ipairs(tabState.subTabs) do
+        st.host:ClearAllPoints()
+        st.host:SetPoint("TOPLEFT", tabState.host, "TOPLEFT", 0, bodyY)
+    end
+    tabState.subBodyTop = -bodyY
+
+    local saved = tabState.pageDef and tabState.pageDef.subTabSelections
+        and tabState.pageDef.subTabSelections[tabState.index]
+    W.SelectSubTab(tabState, (saved and tabState.subTabs[saved]) and saved or 1)
+
+    self.currentSubTab = nil
+    self.inTabbedFrameSection = false
 end
 
 return W

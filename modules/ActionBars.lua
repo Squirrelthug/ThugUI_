@@ -16,6 +16,7 @@ ThugUI.ActionBars = AB
 
 
 
+
 AB.BARS = {
     { key = "MainActionBar",       label = "Action Bar 1 (main)" },
     { key = "MultiBarBottomLeft",  label = "Action Bar 2", setting = "PROXY_SHOW_ACTIONBAR_2" },
@@ -124,6 +125,58 @@ local function HideDividers(bar)
     end
 end
 
+
+local function MainHidden()
+    local cfg = ThugUIDB and ThugUIDB.ActionBars
+    return cfg ~= nil and cfg.hideMain == true
+end
+AB.MainHidden = MainHidden
+
+
+
+local mainHiddenApplied = false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function AB:ApplyMainVisibility()
+    local bar = _G.MainActionBar
+    if not bar then return end
+    local hide = MainHidden()
+    if not hide and not mainHiddenApplied then return end
+    if InCombatLockdown() then
+        state.MainActionBar = state.MainActionBar or {}
+        state.MainActionBar.pendingMain = true
+        return
+    end
+    local buttons = BarButtons(bar, "MainActionBar")
+    for i = 1, 12 do
+        local button = buttons[i]
+        local container = button and (button.container or button:GetParent())
+        if container then ParkContainer(container, hide, bar) end
+    end
+    if type(bar.ActionBarPageNumber) == "table" then
+        ParkContainer(bar.ActionBarPageNumber, hide, bar)
+    end
+    bar:SetAlpha(hide and 0 or 1)
+    mainHiddenApplied = hide
+    if ThugUI.Diagnostics then
+        ThugUI.Diagnostics:Log("ACTIONBARS", "MainActionBar %s", hide and "hidden" or "shown")
+    end
+    
+    if not hide then self:ApplyLayout("MainActionBar") end
+end
+
 function AB.BarInfo(key)
     for _, bar in ipairs(AB.BARS) do
         if bar.key == key then return bar end
@@ -137,6 +190,7 @@ end
 function AB.IsBarEnabled(key)
     local info = AB.BarInfo(key)
     if not info then return nil end
+    if key == "MainActionBar" then return not MainHidden() end
     if not info.setting then return true end
     if not (Settings and Settings.GetValue) then return nil end
     local ok, value = pcall(Settings.GetValue, info.setting)
@@ -150,6 +204,13 @@ end
 
 function AB:SetBarEnabled(key, enabled)
     local info = AB.BarInfo(key)
+    if key == "MainActionBar" then
+        
+        ThugUIDB.ActionBars = ThugUIDB.ActionBars or {}
+        ThugUIDB.ActionBars.hideMain = (not enabled) or nil
+        self:ApplyMainVisibility()
+        return true
+    end
     if not info or not info.setting then return false end
     if not (Settings and Settings.SetValue) then
         if ThugUI.Diagnostics then
@@ -242,6 +303,13 @@ end
 
 function AB:ApplyLayout(key)
     if not key then return end
+
+    
+    
+    if key == "MainActionBar" and MainHidden() then
+        self:ApplyMainVisibility()
+        return
+    end
 
     local cfg = ThugUIDB.ActionBars and ThugUIDB.ActionBars.bars and ThugUIDB.ActionBars.bars[key]
     if not cfg or not cfg.managed then
@@ -457,13 +525,15 @@ function AB:SetManaged(key, managed)
         end
 
         local bar = _G[key]
+        
+        local keepParked = key == "MainActionBar" and MainHidden()
         if bar then
             local buttons = BarButtons(bar, key)
             for i = 1, 12 do
                 if buttons[i] then
                     local container = buttons[i].container or buttons[i]:GetParent()
                     if container then
-                        ParkContainer(container, false, bar)
+                        if not keepParked then ParkContainer(container, false, bar) end
                         container:SetScale(1)
                         container:Show()
                     end
@@ -486,6 +556,7 @@ end
 
 
 function AB:ApplyAll()
+    self:ApplyMainVisibility()
     local bars = ThugUIDB.ActionBars and ThugUIDB.ActionBars.bars
     if not bars then return end
     for _, bar in ipairs(AB.BARS) do
@@ -530,6 +601,11 @@ function AB:Initialize()
                 if s and s.pendingUnmanage then
                     s.pendingUnmanage = nil
                     AB:SetManaged(key, false)
+                end
+
+                if s and s.pendingMain then
+                    s.pendingMain = nil
+                    AB:ApplyMainVisibility()
                 end
 
                 if s and s.pendingEnable ~= nil then

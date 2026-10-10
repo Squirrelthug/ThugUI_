@@ -24,12 +24,14 @@ ThugUI.defaults.ControllerTarget = {
         showPower = true, healthText = "percent", showName = true, showLevel = true,
         showFaction = true, showRole = true, auras = "below", auraSize = 22, auraMax = 16, auraPerRow = 8,
         scale = 1, textScale = 1, iconScale = 1, auraTextScale = 1, auraTimers = true, showDebuffs = true, showBuffs = true,
+        dim = true, dimAmount = 0.5,  
     },
     tot = {
         enabled = true, point = nil, width = 140, healthHeight = 14, powerHeight = 4,
         showPower = true, healthText = "percent", showName = true, showLevel = false,
         showFaction = false, showRole = true, auras = "below", auraSize = 16, auraMax = 6, auraPerRow = 6,
         scale = 1, textScale = 1, iconScale = 1, auraTextScale = 1, auraTimers = true, showDebuffs = true, showBuffs = true,
+        dim = true, dimAmount = 0.5,  
     }
 }
 
@@ -127,12 +129,21 @@ end
 
 local pendingParking = false
 
+
+
+local function NoControllerHere()
+    local M = ThugUI.Modules
+    return M and M.ForClient and not M:ForClient(M:Entry("controller")) or false
+end
+
 local function UsesFrame(which)
     local CM = ThugUI.ControllerMode
     if CM and CM:IsActive() then
         return CM:Uses(which)
     end
-    if ThugUI.UnitFrames and ThugUI.UnitFrames:IsMouseLayer() then
+    
+    
+    if (ThugUI.UnitFrames and ThugUI.UnitFrames:IsMouseLayer()) or NoControllerHere() then
         local c = Cfg()
         return not (c and c[which] and c[which].enabled == false)
     end
@@ -149,6 +160,10 @@ function CT:ApplyParking()
     
     
     local useTarget = UsesFrame("target")
+    if ThugUI.Diagnostics then
+        ThugUI.Diagnostics:Log("TARGET", "parking: useTarget=%s blizzOff=%s active=%s",
+            tostring(useTarget), tostring(blizzOff), tostring(CT:IsActive()))
+    end
     if useTarget then
         SwitchOffBlizzardTarget()
     end
@@ -375,6 +390,8 @@ end
 
 
 local function UpdateUnit(f, key, skipAuras)
+    
+    if not f then return end
     local unit = f.unit
     local c = Cfg()[key]
     
@@ -387,6 +404,14 @@ local function UpdateUnit(f, key, skipAuras)
     end
     
     if not (CT:IsActive() and c.enabled) then
+        
+        
+        
+        if ThugUI.Diagnostics then
+            ThugUI.Diagnostics:LogOnce("ct-hide-" .. key .. tostring(CT:IsActive()) .. tostring(c.enabled),
+                "TARGET", "%s hidden: active=%s enabled=%s mouseLayer=%s",
+                key, tostring(CT:IsActive()), tostring(c.enabled), tostring(ThugUI.unitFramesMouse))
+        end
         f:Hide()
         return
     end
@@ -523,7 +548,27 @@ function CT:Build(key)
     local f = CreateFrame("Frame", key == "target" and "ThugUI_CTarget" or "ThugUI_CTargetTarget", UIParent)
     f:SetFrameStrata("LOW")
     f.unit = key == "target" and "target" or "targettarget"
+
     
+    
+    
+    
+    
+    f:EnableMouse(true)
+    f:SetScript("OnMouseUp", function(self, button)
+        if button == "RightButton" and not CT.unlocked and ThugUI.UnitMenuWindow then
+            ThugUI.UnitMenuWindow:Open(self.unit, self)
+        end
+    end)
+    f:SetScript("OnEnter", function(self)
+        if GameTooltip_SetDefaultAnchor and UnitExists(self.unit) then
+            GameTooltip_SetDefaultAnchor(GameTooltip, self)
+            pcall(GameTooltip.SetUnit, GameTooltip, self.unit)
+            GameTooltip:Show()
+        end
+    end)
+    f:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     f.healthBar = CreateFrame("StatusBar", nil, f)
     f.healthBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
     local bg = f.healthBar:CreateTexture(nil, "BACKGROUND")
@@ -582,6 +627,33 @@ function CT:Build(key)
     return f
 end
 
+
+
+
+
+
+local SHADE_UNLOCKED = { 0.8, 0.05, 0.05, 0.5 }
+
+local function ApplyShade(f, key, unlocked)
+    if not (f and f.shade) then return end
+    if unlocked then
+        local c = SHADE_UNLOCKED
+        f.shade:SetColorTexture(c[1], c[2], c[3], c[4])
+        f.shade:Show()
+        return
+    end
+    local c = Cfg()[key] or {}
+    if c.dim == false then
+        f.shade:Hide()
+        return
+    end
+    local amount = tonumber(c.dimAmount) or 0.5
+    if amount < 0 then amount = 0 elseif amount > 0.9 then amount = 0.9 end
+    f.shade:SetColorTexture(0, 0, 0, amount)
+    f.shade:Show()
+end
+CT.ApplyShade = ApplyShade
+
 function CT:Layout(key)
     local f = frames[key]
     if not f then return end
@@ -628,6 +700,8 @@ function CT:Layout(key)
     f.nameText:SetPoint("LEFT", f.levelText, "RIGHT", 4, 0)
     f.nameText:SetPoint("RIGHT", f.healthText, "LEFT", -4, 0)
     
+    ApplyShade(f, key, CT.unlocked)
+
     f.auraContainer:ClearAllPoints()
     if c.auras == "below" then
         if c.showPower then
@@ -643,21 +717,12 @@ function CT:Layout(key)
 end
 
 
-local SHADE_LOCKED = { 0, 0, 0, 0.5 }
-local SHADE_UNLOCKED = { 0.8, 0.05, 0.05, 0.5 }
-
-local function ApplyShade(f, unlocked)
-    if not (f and f.shade) then return end
-    local c = unlocked and SHADE_UNLOCKED or SHADE_LOCKED
-    f.shade:SetColorTexture(c[1], c[2], c[3], c[4])
-end
-
 function CT:SetUnlocked(unlocked)
     Cfg().unlocked = unlocked and true or false
     self.unlocked = unlocked
     for _, key in ipairs({"target", "tot"}) do
         if not movers[key] then MakeMover(key, key == "target" and "Target" or "Target of target") end
-        ApplyShade(frames[key], self.unlocked)
+        ApplyShade(frames[key], key, self.unlocked)
         if self.unlocked then
             PlaceMover(movers[key], key)
             movers[key]:Show()
@@ -694,7 +759,16 @@ driver:SetScript("OnEvent", function(self, event, unit)
         if pendingParking then CT:ApplyParking() end
         if frames["target"] then UpdateUnit(frames["target"], "target") end
         if frames["tot"] then UpdateUnit(frames["tot"], "tot") end
-    elseif event == "PLAYER_TARGET_CHANGED" or event == "PLAYER_ENTERING_WORLD" or event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        
+        
+        
+        
+        
+        if not frames["target"] and CT:IsActive() then CT:ApplyAll() end
+        if frames["target"] then UpdateUnit(frames["target"], "target") end
+        if frames["tot"] then UpdateUnit(frames["tot"], "tot") end
+    elseif event == "PLAYER_TARGET_CHANGED" or event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
         if frames["target"] then UpdateUnit(frames["target"], "target") end
         if frames["tot"] then UpdateUnit(frames["tot"], "tot") end
     elseif event == "UNIT_TARGET" then

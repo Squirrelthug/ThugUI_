@@ -110,17 +110,45 @@ local function OrbDefaults(colorMode)
         oocAlpha = 1.0,
         
         scale = 0.55,
+        
+        
+        orbShow = true, orbX = 0, orbY = 0, orbAlpha = 1,
+        orbScale = 1.0,      
         locked = true,
         unitPoint = nil,     
         
         decor = "faction",   
+        decorShow = true, decorAlpha = 1,
         decorScale = 1.0,    
         decorX = 0,
         decorY = 0,
         decorFront = false,  
         decorColor = { 1, 1, 1 },
+        
+        artShow = true, artScale = 1, artAlpha = 1,
         hideWhenFull = false,
         showInCombat = false, 
+        
+        
+        
+        
+        
+        timerOn = false,
+        timerRing = "cast",
+        timerFill = "fill",   
+        timerTrack = 0.3,     
+        timer2On = false,
+        timer2 = "gcd",
+        timer2Fill = "fill",
+        timer2Art = "orb",
+        timer2Scale = 1.15,   
+        timer2Color = { 1, 1, 1 },
+        timer2Alpha = 1,
+        timer2Track = 0.25,   
+        
+        
+        
+        timerAlwaysShow = false,
     }
 end
 
@@ -279,8 +307,27 @@ function Orbs:ApplySettings(key)
 
     self:ApplyDecor(key)
 
+    
+    
+    
+    
+    
+    
+    local orbScale = tonumber(c.orbScale) or 1
+    if orbScale <= 0 then orbScale = 1 end
+    f:SetScale(orbScale)
+    
+    
+    f:ClearAllPoints()
+    f:SetPoint("CENTER", u, "CENTER", (tonumber(c.orbX) or 0) / orbScale, (tonumber(c.orbY) or 0) / orbScale)
+
     f.bg:SetColorTexture(0, 0, 0, c.bgAlpha or 0.6)
     f.glass:SetShown(c.glass ~= false)
+    
+    
+    f.body:SetShown(c.orbShow ~= false)
+
+    self:ApplyTimerRings(key)
 
     if c.ring ~= false then
         local ringScale = tonumber(c.ringScale)
@@ -288,7 +335,9 @@ function Orbs:ApplySettings(key)
         local rSize = ORB_SIZE * ringScale
         f.ring:SetSize(rSize, rSize)
         f.ring:ClearAllPoints()
-        f.ring:SetPoint("CENTER", f, "CENTER", c.ringX or 0, c.ringY or 0)
+        f.ring:SetPoint("CENTER", f.ringFrame, "CENTER", 0, 0)
+        f.ringFrame:ClearAllPoints()
+        f.ringFrame:SetPoint("CENTER", f, "CENTER", c.ringX or 0, c.ringY or 0)
         ThugUI.RingArt:Apply(f.ring, {
             art = c.ringArt,
             blend = c.ringBlend,
@@ -298,19 +347,26 @@ function Orbs:ApplySettings(key)
             desat = c.ringDesat,
         })
         f.ring:Show()
+        f.ringFrame:Show()
     else
         f.ring:Hide()
+        f.ringFrame:Hide()
         if f.ring.ringGroup then f.ring.ringGroup:Stop() end
     end
 
-    if type(c.artPath) == "string" and c.artPath ~= "" then
+    if type(c.artPath) == "string" and c.artPath ~= "" and c.artShow ~= false then
         f.art:SetTexture(c.artPath)
         f.art:SetSize(c.artSize or 160, c.artSize or 160)
-        f.art:ClearAllPoints()
-        f.art:SetPoint("CENTER", f, "CENTER", c.artX or 0, c.artY or 0)
+        local artScale = tonumber(c.artScale) or 1
+        if artScale <= 0 then artScale = 1 end
+        f.artFrame:SetScale(artScale)
+        f.artFrame:ClearAllPoints()
+        f.artFrame:SetPoint("CENTER", f, "CENTER", (c.artX or 0) / artScale, (c.artY or 0) / artScale)
         f.art:Show()
+        f.artFrame:Show()
     else
         f.art:Hide()
+        f.artFrame:Hide()
     end
 
     
@@ -360,7 +416,8 @@ function Orbs:ApplyDecor(key)
             key, tostring(c.decor), tostring(kind), tostring(atlas), info and "yes" or "NO",
             tostring(c.decorScale), tostring(c.decorX), tostring(c.decorY), tostring(c.decorFront))
     end
-    if not info then
+    if not info or c.decorShow == false then
+        u.decorFrame:Hide()
         u.decor:Hide()
         return
     end
@@ -368,7 +425,7 @@ function Orbs:ApplyDecor(key)
     u.decor:SetAtlas(atlas)
     u.decor:SetSize((info.width or 128) * scale, (info.height or 128) * scale)
     u.decor:ClearAllPoints()
-    u.decor:SetPoint("CENTER", u, "CENTER", c.decorX or 0, c.decorY or 0)
+    u.decor:SetPoint("CENTER", u.decorFrame, "CENTER", c.decorX or 0, c.decorY or 0)
     u.decor:SetVertexColor(Unpack3(c.decorColor, 1, 1, 1))
     
     local orb = frames[key]
@@ -378,6 +435,7 @@ function Orbs:ApplyDecor(key)
         u.decorFrame:SetFrameLevel(u:GetFrameLevel())
     end
     u.decor:Show()
+    u.decorFrame:Show()
 end
 
 
@@ -488,26 +546,77 @@ Orbs.Suppressed = Suppressed
 
 
 function Orbs:ApplyAlpha(key)
+    self:ApplyAlphaRaw(key)
+    self:ApplyTimerVisibility(key)
+end
+
+
+
+
+
+
+
+
+function Orbs:ApplyTimerVisibility(key)
+    local f = frames[key]
+    if not (f and f.timerCD) then return end
+    local c = Cfg(key)
+    local always = c.timerAlwaysShow == true and not self.testMode
+    local one = always and f.timerCD:IsShown() and true or false
+    local two = always and f.timer2CD:IsShown() and true or false
+    local function Ignore(frame, on)
+        frame.thugIgnoreParent = on
+        if frame.SetIgnoreParentAlpha then pcall(frame.SetIgnoreParentAlpha, frame, on) end
+    end
+    Ignore(f.ringFrame, one)
+    Ignore(f.timer2Frame, two)
+    
+    
+    if one then f.ringFrame:SetAlpha(1) end
+end
+
+function Orbs:ApplyAlphaRaw(key)
     local f, u = frames[key], units[key]
     if not (f and u) then return end
+    local c = Cfg(key)
+    local decor = u.decorFrame
+    local V = ThugUI.Visibility
+
+    
+    
+    
+    
+    local K = (key == "health") and "Health" or "Resource"
+    local visDecor = V and V:Alpha("orb" .. K .. "Decor") or 1
+    local visOrb   = V and V:Alpha("orb" .. K .. "Orb") or 1
+    local visRing  = V and V:Alpha("orb" .. K .. "Ring") or 1
+    local visArt   = V and V:Alpha("orb" .. K .. "Art") or 1
+
+    local decorAlpha = (tonumber(c.decorAlpha) or 1) * visDecor
+    local orbAlpha   = (tonumber(c.orbAlpha) or 1) * visOrb
+    local artAlpha   = (tonumber(c.artAlpha) or 1) * visArt
+    
+    local ringAlpha  = visRing
+
     
     if self.testMode then
         u:SetAlpha(1)
-        f:SetAlpha(1)
-        if u.decorFrame then u.decorFrame:SetAlpha(1) end
+        f.body:SetAlpha(tonumber(c.orbAlpha) or 1)
+        if decor then decor:SetAlpha(tonumber(c.decorAlpha) or 1) end
+        f.ringFrame:SetAlpha(1)
+        if f.artFrame then f.artFrame:SetAlpha(tonumber(c.artAlpha) or 1) end
         return
     end
+
     if Suppressed() then
         u:SetAlpha(0)
         return
     end
-    local c = Cfg(key)
-    local decor = u.decorFrame
-    local V = ThugUI.Visibility
+
     local vis = V and V:Alpha(VKEY[key]) or 1
     local override = V and V:IsOverrideShown(VKEY[key]) or false
 
-    local unitAlpha, plain = vis, 1
+    local unitAlpha = vis
     if CombatForced(key) then
         unitAlpha = 1
     elseif c.hideWhenFull then
@@ -530,17 +639,21 @@ function Orbs:ApplyAlpha(key)
             end
             
             
-            if ok and pcall(f.SetAlpha, f, alpha) then
-                u:SetAlpha(1)
-                if decor then decor:SetAlpha(alpha) end
+            if ok and pcall(u.SetAlpha, u, alpha) then
+                f.body:SetAlpha(orbAlpha)
+                if decor then decor:SetAlpha(decorAlpha) end
+                f.ringFrame:SetAlpha(ringAlpha)
+                if f.artFrame then f.artFrame:SetAlpha(artAlpha) end
                 return
             end
             LogOnce("loggedCurveErr", "percent API refused the curve: %s", tostring(alpha))
         end
     end
     u:SetAlpha(unitAlpha)
-    f:SetAlpha(plain)
-    if decor then decor:SetAlpha(plain) end
+    f.body:SetAlpha(orbAlpha)
+    if decor then decor:SetAlpha(decorAlpha) end
+    f.ringFrame:SetAlpha(ringAlpha)
+    if f.artFrame then f.artFrame:SetAlpha(artAlpha) end
 end
 
 function Orbs:Update(key)
@@ -649,10 +762,18 @@ function Orbs:Build(key)
 
     
     local f = CreateFrame("Frame", right and "ThugUI_Orb_Resource" or "ThugUI_Orb_Health", u)
-    f:SetAllPoints(u)
+    
+    
+    f:SetSize(ORB_SIZE, ORB_SIZE)
+    f:SetPoint("CENTER", u, "CENTER", 0, 0)
     f:SetFrameLevel(u:GetFrameLevel() + 2)
 
-    local mask = f:CreateMaskTexture()
+    local body = CreateFrame("Frame", nil, f)
+    body:SetAllPoints(f)
+    body:SetFrameLevel(f:GetFrameLevel() + 1)
+    f.body = body
+
+    local mask = body:CreateMaskTexture()
     local atlasInfo = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("CircleMaskScalable")
     if atlasInfo then
         mask:SetAtlas("CircleMaskScalable")
@@ -662,12 +783,12 @@ function Orbs:Build(key)
     mask:SetAllPoints(f)
     f.mask = mask
 
-    local bg = f:CreateTexture(nil, "BACKGROUND")
+    local bg = body:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(f)
     if bg.AddMaskTexture then bg:AddMaskTexture(mask) end
     f.bg = bg
 
-    local fill = CreateFrame("StatusBar", nil, f)
+    local fill = CreateFrame("StatusBar", nil, body)
     fill:SetAllPoints(f)
     fill:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
     local tex = fill:GetStatusBarTexture()
@@ -676,7 +797,7 @@ function Orbs:Build(key)
 
     
     
-    local overlay = CreateFrame("Frame", nil, f)
+    local overlay = CreateFrame("Frame", nil, body)
     overlay:SetAllPoints(f)
     
     overlay:SetFrameLevel(fill:GetFrameLevel() + 10)
@@ -690,15 +811,45 @@ function Orbs:Build(key)
     
     
     local ringFrame = CreateFrame("Frame", nil, f)
-    ringFrame:SetAllPoints(f)
+    ringFrame:SetSize(ORB_SIZE, ORB_SIZE)
+    ringFrame:SetPoint("CENTER", f, "CENTER", 0, 0)
     ringFrame:SetFrameLevel(overlay:GetFrameLevel() + 1)
     f.ringFrame = ringFrame
     f.ring = ThugUI.RingArt:NewRing(ringFrame, "ARTWORK")
 
+    
+    
+    
+    local function TimerCD(parent)
+        local cd = CreateFrame("Cooldown", nil, parent)
+        cd:SetPoint("CENTER", parent, "CENTER", 0, 0)
+        cd:SetFrameLevel(parent:GetFrameLevel() + 1)
+        cd:SetHideCountdownNumbers(true)
+        if cd.SetDrawEdge then cd:SetDrawEdge(false) end
+        if cd.SetDrawBling then cd:SetDrawBling(false) end
+        cd:Hide()
+        cd:SetScript("OnCooldownDone", function(self)
+            self:Hide()
+            Orbs:TimerIdle(key, self)
+        end)
+        return cd
+    end
+    f.timerCD = TimerCD(ringFrame)
+    local timer2Frame = CreateFrame("Frame", nil, f)
+    timer2Frame:SetSize(ORB_SIZE, ORB_SIZE)
+    timer2Frame:SetPoint("CENTER", f, "CENTER", 0, 0)
+    timer2Frame:SetFrameLevel(overlay:GetFrameLevel() + 1)
+    f.timer2Frame = timer2Frame
+    f.timer2 = timer2Frame:CreateTexture(nil, "ARTWORK")
+    f.timer2:SetPoint("CENTER", timer2Frame, "CENTER", 0, 0)
+    f.timer2CD = TimerCD(timer2Frame)
+
     local artFrame = CreateFrame("Frame", nil, f)
-    artFrame:SetAllPoints(f)
+    artFrame:SetSize(ORB_SIZE, ORB_SIZE)
+    artFrame:SetPoint("CENTER", f, "CENTER", 0, 0)
     artFrame:SetFrameLevel(overlay:GetFrameLevel() + 2)
     local art = artFrame:CreateTexture(nil, "ARTWORK")
+    art:SetPoint("CENTER", artFrame, "CENTER", 0, 0)
     f.art = art
     f.artFrame = artFrame
 
@@ -710,6 +861,141 @@ end
 
 function Orbs:GetFrame(key)
     return frames[key]
+end
+
+
+
+
+
+
+local function TimerMode(v)
+    if v == "cast" or v == "gcd" then return v end
+    return "off"
+end
+
+
+local function RingMode(c, n)
+    if n == 1 then return c.timerOn and TimerMode(c.timerRing) or "off" end
+    return c.timer2On and TimerMode(c.timer2) or "off"
+end
+Orbs.RingMode = RingMode
+
+
+
+function Orbs:ApplyTimerRings(key)
+    local f = frames[key]
+    if not f or not f.timerCD then return end
+    local c = Cfg(key)
+    local RA = ThugUI.RingArt
+    local mode1, mode2 = RingMode(c, 1), RingMode(c, 2)
+    if mode1 ~= "off" or mode2 ~= "off" then
+        if ThugUI.CastTimer then ThugUI.CastTimer:Start() end
+    end
+
+    local ringScale = tonumber(c.ringScale)
+    if not ringScale or ringScale <= 0 then ringScale = 1.0 end
+    local rSize = ORB_SIZE * ringScale
+    f.timerCD:SetSize(rSize, rSize)
+    f.timerCD:SetSwipeTexture(RA:Find(c.ringArt)[3])
+    local r, g, b = Unpack3(c.ringColor, 1, 1, 1)
+    f.timerCD:SetSwipeColor(r, g, b, tonumber(c.ringAlpha) or 1)
+    if mode1 == "off" or c.ring == false then
+        f.timerCD:Hide()
+    end
+
+    local s2 = tonumber(c.timer2Scale)
+    if not s2 or s2 <= 0 then s2 = 1.15 end
+    local size2 = ORB_SIZE * s2
+    f.timer2Frame:ClearAllPoints()
+    f.timer2Frame:SetPoint("CENTER", f, "CENTER", c.ringX or 0, c.ringY or 0)
+    f.timer2:SetSize(size2, size2)
+    f.timer2CD:SetSize(size2, size2)
+    local art2 = RA:Find(c.timer2Art)
+    f.timer2:SetTexture(art2[3])
+    f.timer2:SetBlendMode(RA:BlendMode(c.timer2Art, "auto"))
+    local r2, g2, b2 = Unpack3(c.timer2Color, 1, 1, 1)
+    f.timer2:SetVertexColor(r2, g2, b2)
+    f.timer2CD:SetSwipeTexture(art2[3])
+    f.timer2CD:SetSwipeColor(r2, g2, b2, tonumber(c.timer2Alpha) or 1)
+    if mode2 == "off" then
+        f.timer2:Hide()
+        f.timer2CD:Hide()
+        f.timer2Frame:Hide()
+    else
+        f.timer2Frame:Show()
+        f.timer2:Show()
+        if not f.timer2CD:IsShown() then
+            f.timer2:SetAlpha((tonumber(c.timer2Track) or 0.25) * (tonumber(c.timer2Alpha) or 1))
+        end
+    end
+end
+
+
+function Orbs:TimerIdle(key, cd)
+    local f = frames[key]
+    if not f then return end
+    local c = Cfg(key)
+    if cd == f.timerCD then
+        f.ring:SetAlpha(tonumber(c.ringAlpha) or 1)
+    elseif cd == f.timer2CD then
+        f.timer2:SetAlpha((tonumber(c.timer2Track) or 0.25) * (tonumber(c.timer2Alpha) or 1))
+    end
+    
+    self:ApplyAlpha(key)
+end
+
+local function RunSweep(cd, fillMode, start, duration, channel, obj)
+    
+    
+    local reverse = fillMode ~= "drain"
+    if channel then reverse = not reverse end
+    cd:SetReverse(reverse)
+    
+    
+    if obj and cd.SetCooldownFromDurationObject then
+        cd:SetCooldownFromDurationObject(obj)
+    elseif start and duration then
+        cd:SetCooldown(start, duration)
+    else
+        return
+    end
+    cd:Show()
+end
+
+
+function Orbs:OnTimer(kind, start, duration, channel, obj)
+    for _, key in ipairs({ "health", "resource" }) do
+        local f = frames[key]
+        local c = f and Cfg(key)
+        if c and c.enabled then
+            local rings = {
+                { cd = f.timerCD, mode = RingMode(c, 1), fill = c.timerFill, usable = c.ring ~= false,
+                  dim = function() f.ring:SetAlpha((tonumber(c.ringAlpha) or 1) * (tonumber(c.timerTrack) or 0.3)) end },
+                { cd = f.timer2CD, mode = RingMode(c, 2), fill = c.timer2Fill, usable = true,
+                  dim = function() f.timer2:SetAlpha((tonumber(c.timer2Track) or 0.25) * (tonumber(c.timer2Alpha) or 1)) end },
+            }
+            for _, ring in ipairs(rings) do
+                if ring.usable and ring.mode ~= "off" then
+                    if kind == ring.mode then
+                        ring.dim()
+                        RunSweep(ring.cd, ring.fill, start, duration, channel, obj)
+                        Orbs:ApplyTimerVisibility(key)
+                    elseif kind == "caststop" and ring.mode == "cast" then
+                        if ring.cd.Clear then ring.cd:Clear() end
+                        ring.cd:Hide()
+                        Orbs:TimerIdle(key, ring.cd)
+                    end
+                end
+            end
+        end
+    end
+end
+
+if ThugUI.CastTimer then
+    ThugUI.CastTimer:Register(function(kind, start, duration, channel, obj)
+        if ThugUI.IsModuleOn and not ThugUI:IsModuleOn("orbs") then return end
+        Orbs:OnTimer(kind, start, duration, channel, obj)
+    end)
 end
 
 
@@ -762,6 +1048,12 @@ function Orbs:Initialize()
         
         
         
+        if c.timerRing == "off" then c.timerRing = "cast" end
+        if c.timer2 == "off" then c.timer2 = "gcd" end
+
+        
+        
+        
         if type(c.oocAlpha) == "number" and c.oocAlpha ~= 1 and ThugUI.Visibility
             and not (ThugUIDB.Visibility and ThugUIDB.Visibility[VKEY[key] ]) then
             ThugUI.Visibility:Get(VKEY[key]).oocAlpha = c.oocAlpha
@@ -787,6 +1079,16 @@ function Orbs:Initialize()
             ThugUI.Visibility:Register(vKey, function()
                 Orbs:UpdateAlpha()
                 Orbs:Update(key)
+            end)
+        end
+        
+        local layerKeys = {
+            "orbHealthDecor", "orbHealthOrb", "orbHealthRing", "orbHealthArt",
+            "orbResourceDecor", "orbResourceOrb", "orbResourceRing", "orbResourceArt"
+        }
+        for _, lKey in ipairs(layerKeys) do
+            ThugUI.Visibility:Register(lKey, function()
+                Orbs:UpdateAlpha()
             end)
         end
     end

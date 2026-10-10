@@ -306,6 +306,11 @@ local function InCombat()
 end
 
 function RR:ShouldShow()
+    
+    
+    
+    
+    if not ThugUI:IsModuleOn("rings") then return false end
     if not ThugUI_Config.showResourceRing then return false end
     if not ThugUI_CursorFrame then return false end
 
@@ -406,7 +411,14 @@ driver:RegisterEvent("PLAYER_ENTERING_WORLD")
 driver:RegisterEvent("PLAYER_REGEN_DISABLED")
 driver:RegisterEvent("PLAYER_REGEN_ENABLED")
 
-driver:SetScript("OnEvent", function(_, event)
+driver:SetScript("OnEvent", function(self, event)
+    
+    
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("rings") then
+        if RR.frame then RR.frame:Hide() end
+        self:UnregisterAllEvents()
+        return
+    end
     if event == "UNIT_DISPLAYPOWER" or event == "UPDATE_SHAPESHIFT_FORM" then
         
         RR:UpdateColor()

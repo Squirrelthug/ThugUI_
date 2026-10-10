@@ -18,7 +18,7 @@ ThugUI.Window:RegisterPage({
         
         local statusRow = CreateFrame("Frame", nil, panel.parent)
         self.statusRow = statusRow
-        local statusText = statusRow:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local statusText = ThugUI.Theme:Paint(statusRow:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "label")
         statusText:SetPoint("LEFT", statusRow, "LEFT", 0, 0)
         self.statusText = statusText
         
@@ -63,19 +63,19 @@ ThugUI.Window:RegisterPage({
                 sep:SetSize(panel.width, 28)
                 sep:SetPoint("TOPLEFT", grid, "TOPLEFT", 0, -currentY)
                 
-                local text = sep:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                local text = ThugUI.Theme:Paint(sep:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormalLarge")), "section")
                 text:SetPoint("CENTER")
                 text:SetText(cat.title)
                 
                 local leftLine = sep:CreateTexture(nil, "BACKGROUND")
                 leftLine:SetHeight(1)
-                leftLine:SetColorTexture(0.45, 0.45, 0.5, 0.8)
+                ThugUI.Theme:Paint(leftLine, "ruleCategory", "fill")
                 leftLine:SetPoint("LEFT", sep, "LEFT", 0, 0)
                 leftLine:SetPoint("RIGHT", text, "LEFT", -12, 0)
                 
                 local rightLine = sep:CreateTexture(nil, "BACKGROUND")
                 rightLine:SetHeight(1)
-                rightLine:SetColorTexture(0.45, 0.45, 0.5, 0.8)
+                ThugUI.Theme:Paint(rightLine, "ruleCategory", "fill")
                 rightLine:SetPoint("LEFT", text, "RIGHT", 12, 0)
                 rightLine:SetPoint("RIGHT", sep, "RIGHT", 0, 0)
                 
@@ -92,11 +92,11 @@ ThugUI.Window:RegisterPage({
                     
                     local bg = tile:CreateTexture(nil, "BACKGROUND")
                     bg:SetAllPoints()
-                    bg:SetColorTexture(0.10, 0.10, 0.12, 0.95)
+                    ThugUI.Theme:Paint(bg, "tileFill", "fill")
                     
                     local hl = tile:CreateTexture(nil, "HIGHLIGHT")
                     hl:SetAllPoints()
-                    hl:SetColorTexture(1, 1, 1, 0.06)
+                    ThugUI.Theme:Paint(hl, "tileHighlight", "fill")
                     
                     local borderTop = tile:CreateTexture(nil, "BORDER")
                     borderTop:SetPoint("TOPLEFT")
@@ -122,11 +122,11 @@ ThugUI.Window:RegisterPage({
                     icon:SetTexture(entry.icon)
                     tile.icon = icon
                     
-                    local titleText = tile:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                    local titleText = ThugUI.Theme:Paint(tile:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormalLarge")), "tileTitle")
                     titleText:SetPoint("TOP", icon, "BOTTOM", 0, -6)
                     titleText:SetText(entry.title)
                     
-                    local descText = tile:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    local descText = ThugUI.Theme:Paint(tile:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlightSmall")), "tileDescription")
                     descText:SetPoint("TOP", titleText, "BOTTOM", 0, -4)
                     descText:SetWidth(tileWidth - 20)
                     descText:SetJustifyH("CENTER")
@@ -134,14 +134,14 @@ ThugUI.Window:RegisterPage({
                     descText:SetMaxLines(3)
                     descText:SetText(entry.desc)
                     
-                    local stateLine = tile:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                    local stateLine = ThugUI.Theme:Paint(tile:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormalSmall")), "tileState")
                     stateLine:SetPoint("BOTTOM", tile, "BOTTOM", 0, 10)
                     tile.stateLine = stateLine
         
-                    local soonText = tile:CreateFontString(nil, "ARTWORK", nil, 7)
+                    local soonText = ThugUI.Theme:Paint(tile:CreateFontString(nil, "ARTWORK", nil, 7), "tileSoonStamp")
                     soonText:SetPoint("CENTER", tile, "CENTER", 0, 0)
                     soonText:SetFont("Fonts\\FRIZQT__.TTF", 46, "THICKOUTLINE")
-                    soonText:SetTextColor(1, 0.15, 0.15)
+                    ThugUI.Theme:Paint(soonText, "tileSoonStamp", "text")
                     soonText:SetText("SOON\226\132\162")
                     if soonText.SetRotation then
                         pcall(soonText.SetRotation, soonText, math.rad(20))
@@ -192,21 +192,13 @@ ThugUI.Window:RegisterPage({
                         if entry.locked then
                             GameTooltip:AddLine("A switch for this comes in a later update.", 0.45, 0.45, 0.55)
                         end
-                        if entry.id == "controller" and (entry.conflicts or entry.covers) then
+                        if entry.id == "controller" and entry.conflicts then
                             local conflictTitles = {}
                             if entry.conflicts then
                                 for _, conflictId in ipairs(entry.conflicts) do
                                     local conflictEntry = M:Entry(conflictId)
                                     if conflictEntry then
                                         table.insert(conflictTitles, conflictEntry.title)
-                                    end
-                                end
-                            end
-                            if entry.covers then
-                                for _, coverId in ipairs(entry.covers) do
-                                    local coverEntry = M:Entry(coverId)
-                                    if coverEntry then
-                                        table.insert(conflictTitles, coverEntry.title)
                                     end
                                 end
                             end
@@ -261,37 +253,38 @@ ThugUI.Window:RegisterPage({
             local pending = M:Pending(entry.id)
             local suspended = M:Suspended(entry.id)
             
-            local r, g, b
+            
+            local role
             if entry.soon then
-                r, g, b = 0.35, 0.35, 0.35
+                role = "tileSoon"
                 tile.stateLine:SetText("Coming soon")
                 tile.soonText:Show()
             else
                 tile.soonText:Hide()
                 if entry.locked then
-                    r, g, b = 0.45, 0.45, 0.55
+                    role = "tileLocked"
                     tile.stateLine:SetText("Always on for now")
                 elseif pending then
-                    r, g, b = 1, 0.82, 0
+                    role = "tilePending"
                     if suspended and stored then
                         tile.stateLine:SetText("Suspended by Controller")
                     else
                         tile.stateLine:SetText(stored and "On after reload" or "Off after reload")
                     end
                 elseif suspended and stored then
-                    r, g, b = 0.30, 0.60, 1.00
+                    role = "tileSuspended"
                     tile.stateLine:SetText("Suspended by Controller")
                 elseif stored then
-                    r, g, b = 0.25, 0.80, 0.35
+                    role = "tileOn"
                     tile.stateLine:SetText("On")
                 else
-                    r, g, b = 0.35, 0.35, 0.35
+                    role = "tileOff"
                     tile.stateLine:SetText("Off")
                 end
             end
             
             for _, border in ipairs(tile.borders) do
-                border:SetColorTexture(r, g, b)
+                ThugUI.Theme:Paint(border, role, "fill")
             end
             
             if entry.soon then

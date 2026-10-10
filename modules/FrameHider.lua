@@ -136,7 +136,10 @@ end
 
 
 function FrameHider:WantCastBar()
-    local show = not ThugUI_Config.hideCastBar
+    
+    
+    
+    local show = not (ThugUI:IsModuleOn("framehider") and ThugUI_Config.hideCastBar)
     if show and ThugUI.Visibility then
         show = ThugUI.Visibility:Alpha("castBar") > 0
     end

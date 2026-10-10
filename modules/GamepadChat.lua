@@ -133,13 +133,13 @@ local function UpdateTabVisibility()
     for _, tab in ipairs(GC.liveTabs) do
         if tab.name == activeTab then
             tab.smf:Show()
-            tab.label:SetTextColor(1, 0.82, 0)
+            ThugUI.Theme:Paint(tab.label, "tabSelected")
         else
             tab.smf:Hide()
             if tab.unread then
-                tab.label:SetTextColor(1, 1, 1)
+                ThugUI.Theme:Paint(tab.label, "label")  
             else
-                tab.label:SetTextColor(0.5, 0.5, 0.5)
+                ThugUI.Theme:Paint(tab.label, "disabled")
             end
         end
     end
@@ -293,6 +293,14 @@ local function AddToCategory(category, text, r, g, b)
     UpdateTabVisibility()
 end
 
+
+
+
+GC.lineListeners = GC.lineListeners or {}
+function GC:AddLineListener(fn)
+    table.insert(self.lineListeners, fn)
+end
+
 local function RouteMessage(text, r, g, b, infoID)
     if issecretvalue and issecretvalue(infoID) then infoID = nil end
     local chatType = nil
@@ -348,6 +356,14 @@ local function RouteMessage(text, r, g, b, infoID)
         ThugUI.Diagnostics:Log("CHAT", "line %d: infoID=%s type=%s via=%s (table has %d) category=%s channel=%s",
             GC.routeLogged, type(infoID) == "number" and tostring(infoID) or type(infoID),
             tostring(chatType), via, reverseCount, tostring(category), tostring(channelName))
+    end
+
+    for i, fn in ipairs(GC.lineListeners) do
+        local ok, err = pcall(fn, text, r, g, b, category, channelName)
+        if not ok and ThugUI.Diagnostics then
+            ThugUI.Diagnostics:LogOnce("chat-listener-" .. i .. "-" .. tostring(err), "CHAT",
+                "line listener %d failed: %s", i, tostring(err))
+        end
     end
 
     local isSecretText = type(text) ~= "string" or (issecretvalue and issecretvalue(text))
@@ -777,7 +793,9 @@ function GC:Initialize()
     
     local bg = w:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, ThugUIDB.GamepadChat.bgAlpha or 0.8)
+    
+    local tr, tg, tb = ThugUI.Theme:Color("background")
+    bg:SetColorTexture(tr, tg, tb, ThugUIDB.GamepadChat.bgAlpha or 0.8)
     w.bg = bg
     
     w.tabContainer = CreateFrame("Frame", nil, w)
@@ -845,7 +863,7 @@ function GC:Initialize()
     toast:SetPoint("BOTTOM", w, "TOP", 0, 10)
     local tbg = toast:CreateTexture(nil, "BACKGROUND")
     tbg:SetAllPoints()
-    tbg:SetColorTexture(0, 0, 0, 0.9)
+    ThugUI.Theme:Paint(tbg, "listBackground", "fill")
     local ttitle = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     ttitle:SetPoint("TOPLEFT", 8, -8)
     ttitle:SetText("New whisper")
@@ -953,7 +971,8 @@ function GC:UpdateSettings()
     if not GC.window then return end
     GC.window:SetSize(ThugUIDB.GamepadChat.width, ThugUIDB.GamepadChat.height)
     if GC.window.bg then
-        GC.window.bg:SetColorTexture(0, 0, 0, ThugUIDB.GamepadChat.bgAlpha or 0.8)
+        local tr, tg, tb = ThugUI.Theme:Color("background")
+        GC.window.bg:SetColorTexture(tr, tg, tb, ThugUIDB.GamepadChat.bgAlpha or 0.8)
     end
     if ThugUIDB.GamepadChat.unlocked then
         GC.window:SetMovable(true)

@@ -377,11 +377,33 @@ function MP:RefreshPopup()
     end
 end
 
+
+
+
+
+local POPUP_DEFAULT_ANGLE = -45
+local POPUP_RIM_OFFSET = 4
+
+local atan2 = math.atan2 or function(y, x) return math.atan(y, x) end
+function MP.AngleTo(cx, cy, px, py)
+    return math.deg(atan2(py - cy, px - cx))
+end
+
+function MP:PlacePopupButton()
+    local btn = self.popupButton
+    if not btn or not Minimap then return end
+    local c = Cfg()
+    local angle = math.rad(tonumber(c and c.popupAngle) or POPUP_DEFAULT_ANGLE)
+    local radius = (Minimap:GetWidth() or 140) / 2 + POPUP_RIM_OFFSET
+    btn:ClearAllPoints()
+    btn:SetPoint("CENTER", Minimap, "CENTER", radius * math.cos(angle), radius * math.sin(angle))
+end
+
 function MP:CreatePopup()
     local popupButton = CreateFrame("Button", "ThugUI_MinimapPopupButton", self.holder)
     self.popupButton = popupButton
     popupButton:SetSize(20, 20)
-    popupButton:SetPoint("CENTER", Minimap, "BOTTOMRIGHT", -18, 18)
+    self:PlacePopupButton()
     
     
     
@@ -416,7 +438,8 @@ function MP:CreatePopup()
         tile = true, tileSize = 32, edgeSize = 24,
         insets = { left = 6, right = 6, top = 6, bottom = 6 },
     })
-    popup:SetBackdropColor(0.04, 0.04, 0.06, 0.96)
+    
+    ThugUI.Theme:Paint(popup, "background", "backdrop")
     popup:Hide()
     self.popup = popup
     if ThugUI.CombatClose then
@@ -430,7 +453,32 @@ function MP:CreatePopup()
         if popup:IsShown() then MP:RefreshPopup() end
     end
     
-    popupButton:SetScript("OnClick", function()
+    
+    
+    
+    
+    popupButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    popupButton:RegisterForDrag("LeftButton")
+    popupButton:SetScript("OnDragStart", function(btn)
+        btn:SetScript("OnUpdate", function()
+            local mx, my = Minimap:GetCenter()
+            if not mx then return end
+            local px, py = GetCursorPosition()
+            local scale = Minimap:GetEffectiveScale()
+            if scale and scale > 0 then px, py = px / scale, py / scale end
+            local c = Cfg()
+            if c then c.popupAngle = MP.AngleTo(mx, my, px, py) end
+            MP:PlacePopupButton()
+        end)
+    end)
+    popupButton:SetScript("OnDragStop", function(btn)
+        btn:SetScript("OnUpdate", nil)
+    end)
+    popupButton:SetScript("OnClick", function(_, mouseButton)
+        if mouseButton == "RightButton" then
+            if ThugUI.Window then ThugUI.Window:Toggle() end
+            return
+        end
         if popup:IsShown() then
             popup:Hide()
         else
@@ -568,7 +616,7 @@ function MP:RefreshTrackingWindow()
     rowIdx = rowIdx + 1
     uncheckRow.icon:SetTexture(nil)
     uncheckRow.name:SetText(UNCHECK_ALL or "Uncheck All")
-    uncheckRow.name:SetTextColor(1, 1, 1)
+    ThugUI.Theme:Paint(uncheckRow.name, "listItem")
     uncheckRow.check:Hide()
     uncheckRow:SetPoint("TOPLEFT", tw, "TOPLEFT", 10, yOffset)
     uncheckRow:SetScript("OnClick", function()
@@ -633,7 +681,7 @@ function MP:RefreshTrackingWindow()
         rowIdx = rowIdx + 1
         row.icon:SetTexture(nil)
         row.name:SetText(text)
-        row.name:SetTextColor(1, 0.82, 0)
+        ThugUI.Theme:Paint(row.name, "listTitle")
         row.check:Hide()
         row:SetPoint("TOPLEFT", tw, "TOPLEFT", 10, yOffset)
         row:SetScript("OnClick", nil)
@@ -659,7 +707,7 @@ function MP:RefreshTrackingWindow()
             end
         end
         row.name:SetText(info.name)
-        row.name:SetTextColor(1, 1, 1)
+        ThugUI.Theme:Paint(row.name, "listItem")
         row.check:SetShown(info.active)
         row:SetPoint("TOPLEFT", tw, "TOPLEFT", 10, yOffset)
         row:EnableMouse(true)
@@ -702,7 +750,7 @@ function MP:CreateTrackingWindow()
         tile = true, tileSize = 32, edgeSize = 24,
         insets = { left = 6, right = 6, top = 6, bottom = 6 },
     })
-    tw:SetBackdropColor(0.04, 0.04, 0.06, 0.96)
+    ThugUI.Theme:Paint(tw, "background", "backdrop")
     tw:SetWidth(200)
     tw:Hide()
     self.trackingWindow = tw
@@ -897,7 +945,7 @@ function MP:TakeOver()
     local outline = CreateFrame("Frame", nil, holder, "BackdropTemplate")
     outline:SetAllPoints(Minimap)
     outline:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 2 })
-    outline:SetBackdropBorderColor(1, 0.82, 0, 1)
+    ThugUI.Theme:Paint(outline, "searchOutline", "border")
     outline:Hide()
     holder.outline = outline
     

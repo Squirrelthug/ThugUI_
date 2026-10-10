@@ -200,8 +200,8 @@ function Guide:EnsurePopout()
         tile = true, tileSize = 16, edgeSize = 14,
         insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    popout:SetBackdropColor(0, 0, 0, 0.95)
-    popout:SetBackdropBorderColor(0.5, 0.5, 0.5, 0.9)
+    ThugUI.Theme:Paint(popout, "listBackground", "backdrop")
+    ThugUI.Theme:Paint(popout, "listBorder", "border")
     popout:Hide()
 
     
@@ -225,8 +225,8 @@ function Guide:EnsurePopout()
         tile = true, tileSize = 16, edgeSize = 14,
         insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    box:SetBackdropColor(0, 0, 0, 0.95)
-    box:SetBackdropBorderColor(0.5, 0.5, 0.5, 0.9)
+    ThugUI.Theme:Paint(box, "listBackground", "backdrop")
+    ThugUI.Theme:Paint(box, "listBorder", "border")
     popout.captionBox = box
 
     
@@ -237,12 +237,12 @@ function Guide:EnsurePopout()
     
     
     
-    box:SetBackdropBorderColor(1, 0.85, 0.1, 1)
+    ThugUI.Theme:Paint(box, "guideHighlight", "border")
 
     local glow = box:CreateTexture(nil, "OVERLAY")
     glow:SetPoint("TOPLEFT", -4, 4)
     glow:SetPoint("BOTTOMRIGHT", 4, -4)
-    glow:SetColorTexture(1, 0.85, 0.25, 1)
+    ThugUI.Theme:Paint(glow, "guideGlow", "fill")
     glow:SetBlendMode("ADD")
     box.glow = glow
 
@@ -254,7 +254,7 @@ function Guide:EnsurePopout()
         self.glow:SetAlpha(0.30 + 0.35 * math.abs(math.sin(self.pulse * 2.2)))
     end)
 
-    local caption = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local caption = ThugUI.Theme:Paint(box:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlightSmall")), "note")
     caption:SetPoint("TOPLEFT", box, "TOPLEFT", CAPTION_PAD, -CAPTION_PAD)
     caption:SetWidth(CAPTION_WIDTH - CAPTION_PAD * 2)
     caption:SetJustifyH("LEFT")
@@ -380,11 +380,11 @@ function Guide:Ensure()
         tile = true, tileSize = 32, edgeSize = 24,
         insets = { left = 6, right = 6, top = 6, bottom = 6 },
     })
-    panel:SetBackdropColor(0.04, 0.04, 0.06, 0.96)
+    ThugUI.Theme:Paint(panel, "background", "backdrop")
     panel:Hide()
     self.panel = panel
 
-    local title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local title = ThugUI.Theme:Paint(panel:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "section")
     title:SetPoint("TOPLEFT", PANEL_INSET, -16)
     
     
@@ -394,7 +394,7 @@ function Guide:Ensure()
     close:SetPoint("TOPRIGHT", -4, -4)
     close:SetScript("OnClick", function() Guide:Hide() end)
 
-    local intro = panel:CreateFontString(nil, "ARTWORK", "GameFontDisable")
+    local intro = ThugUI.Theme:Paint(panel:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontDisable")), "note")
     intro:SetPoint("TOPLEFT", PANEL_INSET, -38)
     intro:SetWidth(PANEL_WIDTH - PANEL_INSET * 2)
     intro:SetJustifyH("LEFT")
@@ -425,7 +425,7 @@ function Guide:Ensure()
     useBlizzardBuffs:SetSize(24, 24)
     useBlizzardBuffs:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -10)
 
-    local cbLabel = useBlizzardBuffs:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local cbLabel = ThugUI.Theme:Paint(useBlizzardBuffs:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlightSmall")), "label")
     cbLabel:SetPoint("LEFT", useBlizzardBuffs, "RIGHT", 4, 0)
     cbLabel:SetText("Use Blizzard's buff frames")
 
@@ -464,13 +464,13 @@ function Guide:Ensure()
         row:SetWidth(PANEL_WIDTH - PANEL_INSET * 2)
         row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -8)
 
-        local number = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+        local number = ThugUI.Theme:Paint(row:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontNormalSmall")), "listTitle")
         number:SetPoint("TOPLEFT", 0, -1)
         number:SetWidth(16)
         number:SetJustifyH("LEFT")
         number:SetText(i .. ".")
 
-        local text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        local text = ThugUI.Theme:Paint(row:CreateFontString(nil, "ARTWORK", ThugUI.Theme:Font("GameFontHighlightSmall")), "listItem")
         text:SetPoint("TOPLEFT", 18, 0)
         text:SetWidth(PANEL_WIDTH - PANEL_INSET * 2 - 18)
         text:SetJustifyH("LEFT")
@@ -527,15 +527,15 @@ function Guide:CreateLink(panel)
     local host = panel.parent
 
     local link = CreateFrame("Button", nil, host)
-    local label = link:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local label = ThugUI.Theme:Paint(link:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "link")
     label:SetPoint("LEFT", link, "LEFT", 0, 0)
     label:SetText("[WORKAROUND]")
-    label:SetTextColor(1, 0.13, 0.13)
+    ThugUI.Theme:Paint(label, "link", "text")
     link:SetSize(label:GetStringWidth() + 6, 18)
     link:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 
-    link:SetScript("OnEnter", function() label:SetTextColor(1, 0.45, 0.45) end)
-    link:SetScript("OnLeave", function() label:SetTextColor(1, 0.13, 0.13) end)
+    link:SetScript("OnEnter", function() ThugUI.Theme:Paint(label, "linkHover", "text") end)
+    link:SetScript("OnLeave", function() ThugUI.Theme:Paint(label, "link", "text") end)
     link:SetScript("OnClick", function() Guide:Toggle() end)
 
     if W and W.AttachTooltip then

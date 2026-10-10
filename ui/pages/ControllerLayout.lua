@@ -33,7 +33,7 @@ local function Build(panel)
         { title = "Controller buttons", reset = function() CL():ResetBar() end,
           min = 0.5, max = 1.5, key = "barScale",
           setScale = function(v) CL():SetBarScale(v) end,
-          vis = "controllerButtons", macroNames = true },
+          vis = "controllerButtons", visOpts = { padReveal = true }, macroNames = true },
         { title = "Cast bar", reset = function() CL():ResetCast() end,
           min = 0.5, max = 2.5, key = "castScale",
           setScale = function(v) CL():SetCastScale(v) end,
@@ -68,6 +68,12 @@ local function Build(panel)
         }
         
         if fr.note then panel:Note(fr.note) end
+        
+        
+        
+        if fr.key or fr.macroNames then
+            panel:SubSection("Size & look")
+        end
         if fr.key then
             panel:Part("Size & position")
             panel:Slider{
@@ -79,12 +85,7 @@ local function Build(panel)
                 set = function(v) if CL() then fr.setScale(v) end end,
             }
         end
-        if fr.vis and ThugUI.Visibility then
-            panel:Part("Visibility")
-            ThugUI.Visibility:AddControls(panel, fr.vis, fr.visOpts)
-        end
         if fr.macroNames then
-            
             panel:Part("Appearance")
             panel:Checkbox{
                 label = "Hide macro names",
@@ -93,6 +94,11 @@ local function Build(panel)
                 get = function() return ThugUIDB.ControllerLayout and ThugUIDB.ControllerLayout.hideMacroName == true end,
                 set = function(v) if CL() then CL():SetHideMacroName(v) end end,
             }
+        end
+        if fr.vis and ThugUI.Visibility then
+            local o = { split = true }
+            for k, v in pairs(fr.visOpts or {}) do o[k] = v end
+            ThugUI.Visibility:AddControls(panel, fr.vis, o)
         end
     end
 end

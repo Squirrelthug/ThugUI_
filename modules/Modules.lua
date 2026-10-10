@@ -15,23 +15,36 @@
 ThugUI.ModuleRegistry = {
     { id = "controller", title = "Controller", icon = "Interface\\Icons\\INV_Misc_Gear_01",
       desc = "Gamepad play: wheel, chat, layout, XP bar, minimap, focused quest.",
-      modules = { "ControllerMode","GamepadChat","ControllerShortcuts","AuraWindow","ControllerRadial",
-                  "ControllerLayout","XPBar","MinimapPanel","FocusedQuest","Travel","Prep" },
+      modules = { "ControllerMode","GamepadChat","ControllerShortcuts","ControllerRadial",
+                  "ControllerLayout","XPBar","MinimapPanel","FocusedQuest","Travel","Prep","ControllerStream",
+                  "ControllerObjectives" },
       pages = { "chat","controllerlayout","xpbar","minimap","prep" },
-      conflicts = { "actionbars","rings","minimapmouse" },
-      category = "controller", defaultOff = true,
       
-      covers = { "acorns" },
+      
+      
+      conflicts = { "actionbars","rings","minimapmouse","acorns" },
+      category = "controller", defaultOff = true,
       
       
       
       clients = { forever = true } },
-    { id = "cooldowns",  title = "Cooldown grids", icon = "Interface\\Icons\\Spell_Nature_TimeStop",
+    
+    
+    
+    
+    
+    
+    { id = "auras", title = "Buff window", icon = "Interface\\Icons\\Spell_Holy_WordFortitude",
+      desc = "Controller: hides Blizzard's buffs and debuffs; the wheel and L1+L2 open your own buff window.",
+      modules = { "AuraWindow" }, pages = { "auras" },
+      category = "controller", defaultOff = true,
+      clients = { forever = true } },
+    { id = "cooldowns",  title = "Cooldown viewer", icon = "Interface\\Icons\\Spell_Nature_TimeStop",
       desc = "Per-spec cooldown grids on the cursor.", modules = {}, pages = { "cooldownviewer" }, category = "combat" },
     { id = "rings",      title = "Cursor rings",   icon = "Interface\\Icons\\Spell_Holy_MagicalSentry",
       desc = "GCD, cast, resource ring and combo pips around the cursor.", modules = {}, pages = { "cursorrings" }, category = "combat" },
     { id = "actionbars", title = "Action bars", icon = "Interface\\Icons\\INV_Misc_Book_09",
-      desc = "Blizzard's bars in your rows and columns.", modules = { "ActionBars" }, pages = { "actionbars" }, category = "combat", defaultOff = true },
+      desc = "Blizzard's bars in your rows and columns.", modules = { "ActionBars" }, pages = { "actionbars", "actionbars_xp", "actionbars_micro", "actionbars_bags" }, category = "combat", defaultOff = true },
     { id = "nameplates", title = "Nameplates", icon = "Interface\\Icons\\INV_Misc_Note_01",
       desc = "Name-only plates out of combat.", modules = { "Nameplates" }, pages = { "nameplates" }, category = "combat", defaultOff = true },
     { id = "camera",     title = "Camera", icon = "Interface\\Icons\\INV_Misc_Spyglass_03",
@@ -44,14 +57,20 @@ ThugUI.ModuleRegistry = {
     { id = "targetframes", title = "Target frames", icon = "Interface\\Icons\\Ability_Hunter_MarkedForDeath",
       desc = "Target and target-of-target frames in place of Blizzard's.",
       modules = { "ControllerTarget" }, pages = { "controllertarget" }, category = "ui" },
+    
+    
+    
+    { id = "partyframes", title = "Party frames", icon = "Interface\\Icons\\INV_Misc_GroupNeedMore",
+      desc = "Party frames in place of Blizzard's: bars, squares or circles.",
+      modules = { "PartyFrames" }, pages = { "partyframes" }, category = "ui" },
     { id = "minimapmouse", title = "Minimap", icon = "Interface\\Icons\\INV_Misc_Map_01",
       desc = "The ThugUI minimap panel for mouse play, with its own settings.",
       modules = {}, pages = { "minimapmouse" }, category = "interface", defaultOff = true },
     { id = "orbeffects", title = "Orb effects", icon = "Interface\\Icons\\Spell_Nature_WispSplode",
       desc = "Animated effects in the orbs and pips. Costs frame rate.", modules = { "OrbEffects" },
-      pages = { "orbfx_health","orbfx_mana","orbfx_rage","orbfx_energy","orbfx_pips" }, defaultOff = true, soon = true, category = "ui" },
+      pages = {}, defaultOff = true, soon = true, category = "ui" },
     { id = "acorns",     title = "Acorns", icon = "Interface\\AddOns\\ThugUI\\media\\Acorn",
-      desc = "Acorns standing in for hidden chat and tracker.", modules = { "Acorns" }, pages = { "acorns" }, category = "interface" },
+      desc = "Acorns standing in for hidden chat and tracker.", modules = { "Acorns" }, pages = { "acorns", "acorns_chat", "acorns_objectives" }, category = "interface" },
     { id = "framehider", title = "Frame hider", icon = "Interface\\Icons\\Spell_Nature_Invisibilty",
       desc = "Turn off Blizzard frames you never look at.", modules = {}, pages = { "framehider" }, category = "interface" },
     { id = "automation", title = "Automation", icon = "Interface\\Icons\\INV_Misc_Coin_01",
@@ -148,6 +167,20 @@ function M:PinOldDefaults()
     ThugUIDB.ModulesDefaults = M.DEFAULTS_VERSION
 end
 
+
+
+
+
+function M:MigrateAuraTile()
+    if not ThugUIDB then return end
+    ThugUIDB.Modules = ThugUIDB.Modules or {}
+    if ThugUIDB.Modules.auras ~= nil then return end
+    if ThugUI.Profiles and ThugUI.Profiles.freshInstall then return end
+    local old = ThugUIDB.AuraWindow and ThugUIDB.AuraWindow.enabled
+    ThugUIDB.Modules.auras = old ~= false
+    if ThugUIDB.AuraWindow then ThugUIDB.AuraWindow.enabled = nil end
+end
+
 function M:Snapshot()
     if ThugUIDB and ThugUIDB.Modules and ThugUIDB.Modules.unitframes ~= nil then
         
@@ -170,6 +203,7 @@ function M:Snapshot()
     end
 
     M:PinOldDefaults()
+    M:MigrateAuraTile()
 
     ThugUI.moduleOn = {}
     ThugUI.moduleBase = {}
@@ -210,10 +244,10 @@ function M:Snapshot()
     
     ThugUI.moduleOn.travel = ThugUI.moduleOn.controller
     ThugUI.moduleOn.prep = ThugUI.moduleOn.controller
-    ThugUI.moduleOn.focusedquest = ThugUI.moduleOn.controller and ThugUI.moduleOn.acorns
+    ThugUI.moduleOn.focusedquest = ThugUI.moduleOn.controller
 
     
-    ThugUI.unitFramesMouse = (ThugUI.moduleOn.orbs or ThugUI.moduleOn.targetframes) and M:ForClient(M:Entry("controller")) and not ThugUI.controllerAtLoad
+    ThugUI.unitFramesMouse = (ThugUI.moduleOn.orbs or ThugUI.moduleOn.targetframes or ThugUI.moduleOn.partyframes) and M:ForClient(M:Entry("controller")) and not ThugUI.controllerAtLoad
     if ThugUI.UnitFrames then ThugUI.UnitFrames:ApplyLayer() end
 
     
@@ -271,22 +305,6 @@ end
 function M:Suspended(id)
     if ThugUI.moduleSuspended and ThugUI.moduleSuspended[id] == true then
         return true
-    end
-    local controllerEntry = M:Entry("controller")
-    if controllerEntry and controllerEntry.covers then
-        for _, coveredId in ipairs(controllerEntry.covers) do
-            if coveredId == id then
-                if ThugUI.moduleOn and ThugUI.moduleOn.controller then
-                    if ThugUI.ControllerMode and ThugUI.ControllerMode.IsActive then
-                        local ok, active = pcall(ThugUI.ControllerMode.IsActive, ThugUI.ControllerMode)
-                        if ok and active then
-                            return true
-                        end
-                    end
-                end
-                break
-            end
-        end
     end
     return false
 end
@@ -352,7 +370,7 @@ function M:PageOn(pageId)
     return true
 end
 
-StaticPopupDialogs["THUGUI_MODULES_RELOAD"] = {
+ThugUI.Dialogs["THUGUI_MODULES_RELOAD"] = {
     text = "ThugUI: controller mode changed. Reload so the modules it replaces switch %s?",
     button1 = "Reload now",
     button2 = "Later",
@@ -398,14 +416,14 @@ function M:CheckControllerDrift()
                 if event == "PLAYER_REGEN_ENABLED" then
                     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
                     if self.pendingReload then
-                        StaticPopup_Show("THUGUI_MODULES_RELOAD", self.pendingReload)
+                        ThugUI.Dialog:Show("THUGUI_MODULES_RELOAD", self.pendingReload)
                         self.pendingReload = nil
                     end
                 end
             end)
             driftRegenFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         else
-            StaticPopup_Show("THUGUI_MODULES_RELOAD", switchText)
+            ThugUI.Dialog:Show("THUGUI_MODULES_RELOAD", switchText)
         end
     end
 end

@@ -86,11 +86,9 @@ local function RegisterMinimapPage(opts)
             set = function(v) getCfg().scale = v; Apply() end,
         }
 
-        if ThugUI.Visibility then
-            panel:Section("Visibility")
-            ThugUI.Visibility:AddControls(panel, visKey)
-        end
-
+        
+        
+        panel:Section("Layout & look")
         panel:Checkbox{
             label = "Show the day/night ring",
             get = function() return getCfg().showDiel end,
@@ -168,6 +166,15 @@ local function RegisterMinimapPage(opts)
             end,
         }
 
+        if ThugUI.Visibility then
+            
+            
+            
+            
+            panel:FrameSection{ title = "Visibility" }
+            ThugUI.Visibility:AddControls(panel, visKey, { moving = true, split = true })
+        end
+
         panel:Section("Collected Addon Buttons")
         panel:Note("Uncheck to hide a button from the popup.")
 
@@ -198,7 +205,7 @@ local function RegisterMinimapPage(opts)
                 if not row then
                     row = CreateFrame("CheckButton", nil, self.addonListHost, "UICheckButtonTemplate")
                     row:SetSize(24, 24)
-                    local text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                    local text = ThugUI.Theme:Paint(row:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "label")
                     text:SetPoint("LEFT", row, "RIGHT", 4, 0)
                     row.labelText = text
                     self.rows[i] = row

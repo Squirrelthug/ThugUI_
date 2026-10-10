@@ -20,7 +20,13 @@ ThugUI.defaults.Fishing = {
     applyLures = true,
     gearButton = true,
     enhanceSounds = false,
-    soundScale = 1
+    soundScale = 1,
+    
+    doubleClick = false,
+    doubleClickButton = "RightButton",  
+    doubleKey = nil,                    
+    doubleWindow = 0.4,                 
+    doubleNeedsPole = true,
 }
 
 local MAIN = INVSLOT_MAINHAND or 16
@@ -122,12 +128,14 @@ function F:Update()
         return
     end
 
+    local desired = self:DesiredBody()
+    if desired == "" then return end
+    
+    F:ArmCastButtons(desired)
+
     if not GetMacroIndexByName or not GetMacroBody then return end
     local index = GetMacroIndexByName(MACRO_NAME)
     if not index or index == 0 then return end
-
-    local desired = self:DesiredBody()
-    if desired == "" then return end
 
     local current = GetMacroBody(index)
     if current ~= desired then
@@ -186,6 +194,195 @@ function F:CreateMacro()
     self:Update()
     PickupMacro(MACRO_NAME)
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local castMouse, castKey, keyWatch
+local bindOwner = CreateFrame("Frame")
+local mouseBound, keyArmed, clearAfterCombat = false, false, false
+local lastMouse, mouseGen, keyGen = 0, 0, 0
+
+local function Cfg() return ThugUIDB.Fishing or {} end
+local function InCombat() return InCombatLockdown and InCombatLockdown() end
+
+local function Window()
+    local w = tonumber(Cfg().doubleWindow) or 0.4
+    if w < 0.15 then w = 0.15 elseif w > 1 then w = 1 end
+    return w
+end
+
+local function Allowed()
+    if not ThugUI:IsModuleOn("fishing") or InCombat() then return false end
+    if Cfg().doubleNeedsPole ~= false and not F.PoleEquipped() then return false end
+    return true
+end
+
+local function MakeCastButton(name, onDown)
+    local b = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
+    b:SetSize(1, 1)
+    b:SetAlpha(0)
+    b:EnableMouse(false)
+    b:Show()
+    if onDown then
+        b:RegisterForClicks("AnyDown")
+        b:SetAttribute("useOnKeyDown", true)
+    else
+        b:RegisterForClicks("AnyUp")
+        b:SetAttribute("useOnKeyDown", false)
+    end
+    b:SetAttribute("type", "macro")
+    b:SetAttribute("macrotext", "")
+    return b
+end
+
+
+function F:GetCastButtons()
+    if not castMouse and not InCombat() then
+        castMouse = MakeCastButton("ThugUI_FishCast", false)
+        castKey = MakeCastButton("ThugUI_FishCastKey", true)
+        castMouse:HookScript("PostClick", function() F:ClearMouseBinding(true) end)
+        castKey:HookScript("PostClick", function() F:RestoreKeyWatcher(true) end)
+    end
+    return castMouse, castKey
+end
+
+function F:ArmCastButtons(body)
+    if InCombat() then self.pending = true return end
+    local m, k = self:GetCastButtons()
+    if m then m:SetAttribute("macrotext", body) end
+    if k then k:SetAttribute("macrotext", body) end
+end
+
+
+
+function F:ClearMouseBinding(deferred)
+    if not mouseBound then return end
+    local function Clear()
+        if not mouseBound then return end
+        if InCombat() then clearAfterCombat = true return end
+        mouseBound = false
+        ClearOverrideBindings(bindOwner)
+        
+        F:ApplyKeyBinding()
+    end
+    if deferred then C_Timer.After(0, Clear) else Clear() end
+end
+
+function F:OnWorldMouseDown(button)
+    local c = Cfg()
+    if not c.doubleClick or button ~= (c.doubleClickButton or "RightButton") then return end
+    if not Allowed() then return end
+    
+    if GetNumLootItems and (GetNumLootItems() or 0) > 0 then return end
+    local now = GetTime()
+    local diff = now - lastMouse
+    lastMouse = now
+    if diff > 0.05 and diff < Window() then
+        lastMouse = 0
+        local m = self:GetCastButtons()
+        if not m then return end
+        if IsMouselooking and IsMouselooking() and MouselookStop then MouselookStop() end
+        SetOverrideBindingClick(bindOwner, true, button == "LeftButton" and "BUTTON1" or "BUTTON2", "ThugUI_FishCast")
+        mouseBound = true
+        mouseGen = mouseGen + 1
+        local gen = mouseGen
+        C_Timer.After(Window() + 0.5, function()
+            if gen == mouseGen then F:ClearMouseBinding(false) end
+        end)
+    end
+end
+
+
+
+
+function F:ApplyKeyBinding()
+    if InCombat() then self.pending = true return end
+    if not mouseBound then ClearOverrideBindings(bindOwner) end
+    keyArmed = false
+    local key = Cfg().doubleKey
+    if type(key) ~= "string" or key == "" or not ThugUI:IsModuleOn("fishing") then return end
+    if not keyWatch then
+        keyWatch = CreateFrame("Button", "ThugUI_FishKeyWatch", UIParent)
+        keyWatch:RegisterForClicks("AnyDown")
+        keyWatch:SetScript("OnClick", function() F:OnKeyFirstPress() end)
+    end
+    self:GetCastButtons()
+    SetOverrideBindingClick(bindOwner, true, key, "ThugUI_FishKeyWatch")
+end
+
+function F:OnKeyFirstPress()
+    if not Allowed() then return end
+    local key = Cfg().doubleKey
+    if type(key) ~= "string" or key == "" then return end
+    SetOverrideBindingClick(bindOwner, true, key, "ThugUI_FishCastKey")
+    keyArmed = true
+    keyGen = keyGen + 1
+    local gen = keyGen
+    C_Timer.After(Window(), function()
+        if gen == keyGen then F:RestoreKeyWatcher(false) end
+    end)
+end
+
+function F:RestoreKeyWatcher(deferred)
+    if not keyArmed then return end
+    local function Restore()
+        if not keyArmed then return end
+        if InCombat() then clearAfterCombat = true return end
+        keyGen = keyGen + 1
+        F:ApplyKeyBinding()
+    end
+    if deferred then C_Timer.After(0, Restore) else Restore() end
+end
+
+
+function F:SetDoubleKey(key)
+    Cfg().doubleKey = key
+    self:ApplyKeyBinding()
+end
+
+local hooked = false
+function F:InitDoublePress()
+    if not hooked and WorldFrame and WorldFrame.HookScript then
+        hooked = true
+        WorldFrame:HookScript("OnMouseDown", function(_, button) F:OnWorldMouseDown(button) end)
+    end
+    if not InCombat() then
+        self:GetCastButtons()
+        self:ApplyKeyBinding()
+    end
+end
+
+function F:OnRegenDoublePress()
+    if clearAfterCombat then
+        clearAfterCombat = false
+        mouseBound = false
+        keyArmed = false
+        self:ApplyKeyBinding()
+    end
+end
+
+
+F.bindOwner = bindOwner
+function F:DoublePressState() return mouseBound, keyArmed end
 
 SlashCmdList["THUGFISH"] = function()
     if not ThugUI:IsModuleOn("fishing") then
@@ -262,7 +459,10 @@ F:SetScript("OnEvent", function(self, event, ...)
         if self.pending then
             self.pending = false
             self:Update()
+            
+            self:ApplyKeyBinding()
         end
+        self:OnRegenDoublePress()
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local unit = ...
         if unit == "player" and IsFishingChannel() then
@@ -275,6 +475,7 @@ F:SetScript("OnEvent", function(self, event, ...)
         end
     elseif event == "PLAYER_LOGIN" then
         RestoreFishingSounds()
+        self:InitDoublePress()
     end
 end)
 

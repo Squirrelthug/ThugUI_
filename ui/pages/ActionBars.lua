@@ -74,18 +74,21 @@ function Page:Build(host, panel)
     
     
     
+    
     Page.widgets = Page.widgets or {}
     Page.widgets.enabled = panel:Checkbox{
-        label = "Enable this bar (Blizzard's Action Bar setting)",
-        tooltip = "The same switch as Options > Action Bars. The main bar is "
-            .. "always on. Takes effect out of combat.",
+        label = "Enable this bar",
+        tooltip = "Bars 2-8: the same switch as Options > Action Bars. Bar 1 has no "
+            .. "Blizzard switch, so ThugUI hides it: its buttons and art disappear "
+            .. "but its keybinds still work. While it is hidden you will not see what "
+            .. "Blizzard swaps onto bar 1 (forms, Skyriding, some vehicles). "
+            .. "Takes effect out of combat.",
         get = function()
             local enabled = AB.IsBarEnabled(Page.selectedKey or "MainActionBar")
             return enabled == true
         end,
         set = function(v)
             local key = Page.selectedKey or "MainActionBar"
-            if key == "MainActionBar" then return end
             AB:SetBarEnabled(key, v)
             ThugUI.Window:RefreshActivePage()
         end,
@@ -264,20 +267,6 @@ function Page:Build(host, panel)
     panel:Note("Turning management off restores Blizzard's layout on the next "
         .. "/reload. The page lock is independent of management.")
 
-    panel:Section("XP, micro menu & bags")
-
-    EditModeButton(panel)
-
-    if ThugUI.Visibility and ThugUI.Visibility.AddControls then
-        panel:Group("XP bar")
-        ThugUI.Visibility:AddControls(panel, "statusBar")
-
-        panel:Group("Micro menu")
-        ThugUI.Visibility:AddControls(panel, "microMenu")
-
-        panel:Group("Bag bar")
-        ThugUI.Visibility:AddControls(panel, "bagBar")
-    end
 end
 
 Page.selectedKey = "MainActionBar"
@@ -297,5 +286,39 @@ ThugUI.Window:RegisterPage{
     
     
 }
+
+
+
+
+local SUBPAGES = {
+    { id = "actionbars_xp", title = "XP bar", order = 31, vkey = "statusBar",
+      note = "Blizzard's experience, reputation and honor bars. Edit Mode moves and sizes them; "
+          .. "this sets when they show." },
+    { id = "actionbars_micro", title = "Micro menu", order = 32, vkey = "microMenu",
+      note = "The row of small buttons for the character, spellbook, talents and the other game windows. "
+          .. "Edit Mode moves and sizes it; this sets when it shows." },
+    { id = "actionbars_bags", title = "Bag bar", order = 33, vkey = "bagBar",
+      note = "The backpack and bag slot buttons. Edit Mode moves and sizes them; this sets when they show." },
+}
+
+for _, sub in ipairs(SUBPAGES) do
+    ThugUI.Window:RegisterPage{
+        id = sub.id,
+        parent = "actionbars",
+        category = "combat",
+        order = sub.order,
+        scopeKeys = { "Visibility" },
+        summary = sub.note,
+        title = sub.title,
+        build = function(host, panel)
+            panel:Header(sub.title)
+            panel:Note(sub.note)
+            EditModeButton(panel)
+            if ThugUI.Visibility and ThugUI.Visibility.AddControls then
+                ThugUI.Visibility:AddControls(panel, sub.vkey)
+            end
+        end,
+    }
+end
 
 return Page

@@ -31,11 +31,15 @@ ThugUI.defaults.ResourcePips = {
     gap = 4,                      
     orientation = "horizontal",   
     scale = 1,
+    
+    
+    pipsShow = true, pipsX = 0, pipsY = 0, pipsScale = 1, pipsAlpha = 1,
     point = nil,                  
     colorMode = "power",          
     customColor = { 1, 0.85, 0.3 },
     dimAlpha = 0.25,              
     ring = false,                 
+    ringX = 0, ringY = 0,
     ringArt = "orb",              
     ringBlend = "auto",           
     ringAlpha = 1,                
@@ -124,6 +128,14 @@ function RP:Build()
     local f = CreateFrame("Frame", "ThugUI_ResourcePips", UIParent)
     f:SetFrameStrata("HIGH") 
     f:Hide()
+
+    
+    
+    
+    local body = CreateFrame("Frame", nil, f)
+    body:SetPoint("CENTER", f, "CENTER", 0, 0)
+    f.body = body
+
     frame = f
     RP.frame = f
     return f
@@ -141,16 +153,18 @@ end
 
 function RP:BuildRing()
     if RP.ringFrame then return RP.ringFrame end
-    local pipsFrame = self:Build()
-    local level = pipsFrame:GetFrameLevel() - 1
+    local f = self:Build()
+    
+    
+    
+    local r = CreateFrame("Frame", "ThugUI_ResourcePipsRing", f)
+    local level = f.body:GetFrameLevel() - 1
     if level < 0 then level = 0 end
-    local r = CreateFrame("Frame", "ThugUI_ResourcePipsRing", UIParent)
-    r:SetFrameStrata("HIGH")
     r:SetFrameLevel(level)
-    r:SetPoint("CENTER", pipsFrame, "CENTER")
     r:EnableMouse(false)
 
     RP.ringFrame = r
+    f.ringFrame = r
     return r
 end
 
@@ -161,13 +175,13 @@ local pipCanvases = {}
 local function Pip(i)
     if pips[i] then return pips[i], pipHolders[i], pipCanvases[i] end
     
-    local h = CreateFrame("Frame", nil, frame)
+    local h = CreateFrame("Frame", nil, frame.body)
     pipHolders[i] = h
     
     local canvas = ThugUI.OrbArt:NewCanvas(h, { kind = "pip" })
     pipCanvases[i] = canvas
     
-    local t = frame:CreateTexture(nil, "OVERLAY")
+    local t = frame.body:CreateTexture(nil, "OVERLAY")
     t:SetTexture("Interface\\AddOns\\ThugUI\\media\\Reticle_Dot")
     t:SetBlendMode("BLEND")
     pips[i] = t
@@ -192,6 +206,16 @@ function RP:Layout(n)
     if IsPoint(c.point) then x, y = c.point.x, c.point.y else x, y = DefaultPoint() end
     f:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale, y / scale)
 
+    local body = f.body
+    local pipsScale = tonumber(c.pipsScale) or 1
+    if pipsScale <= 0 then pipsScale = 1 end
+    body:SetSize(math.max(w, 1), math.max(h, 1))
+    body:SetScale(pipsScale)
+    body:ClearAllPoints()
+    
+    body:SetPoint("CENTER", f, "CENTER", (tonumber(c.pipsX) or 0) / pipsScale, (tonumber(c.pipsY) or 0) / pipsScale)
+    body:SetShown(c.pipsShow ~= false)
+
     local stack = ThugUI.OrbEffects and ThugUI.OrbEffects:PipStack()
     local adjust = ThugUIDB.OrbEffects and ThugUIDB.OrbEffects.pips and ThugUIDB.OrbEffects.pips.adjust or {}
 
@@ -199,11 +223,11 @@ function RP:Layout(n)
         local t, h, canvas = Pip(i)
         t:SetSize(size, size)
         t:ClearAllPoints()
-        t:SetPoint("CENTER", f, "CENTER", p.x, p.y)
+        t:SetPoint("CENTER", body, "CENTER", p.x, p.y)
         
         h:SetSize(size, size)
         h:ClearAllPoints()
-        h:SetPoint("CENTER", f, "CENTER", p.x, p.y)
+        h:SetPoint("CENTER", body, "CENTER", p.x, p.y)
 
         if stack then
             t:Hide()
@@ -219,6 +243,16 @@ function RP:Layout(n)
         pipHolders[i]:Hide()
     end
     self:UpdateRing()
+end
+
+
+
+function RP:ApplyBodyAlpha()
+    if not (frame and frame.body) then return end
+    local c = Cfg()
+    local vis = 1
+    if not Testing() and ThugUI.Visibility then vis = ThugUI.Visibility:Alpha("resourcePipsBody") end
+    frame.body:SetAlpha((tonumber(c.pipsAlpha) or 1) * vis)
 end
 
 function RP:UpdateRingAlphas(filledCount)
@@ -256,17 +290,19 @@ function RP:UpdateRing()
     local positions, w, h = RP.Positions(c, n)
     local pipSize = tonumber(c.size) or 12
 
-    r:SetScale(scale)
-    r:SetSize(math.max(w, 1), math.max(h, 1))
-    r:ClearAllPoints()
-    r:SetPoint("CENTER", pipsFrame, "CENTER")
-
     local ringScale = tonumber(c.ringScale)
     if not ringScale or ringScale <= 0 then ringScale = 1.6 end
     local ringDiameter = pipSize * ringScale
 
-    local ringX = tonumber(c.ringX) or 0
-    local ringY = tonumber(c.ringY) or 0
+    
+    
+    
+    local pipsScale = tonumber(c.pipsScale) or 1
+    if pipsScale <= 0 then pipsScale = 1 end
+    r:SetScale(pipsScale)
+    r:SetSize(math.max(w, 1), math.max(h, 1))
+    r:ClearAllPoints()
+    r:SetPoint("CENTER", pipsFrame.body, "CENTER", (tonumber(c.ringX) or 0), (tonumber(c.ringY) or 0))
 
     local applyOpt = {
         art = c.ringArt,
@@ -281,7 +317,7 @@ function RP:UpdateRing()
         local t = Ring(i, r)
         t:SetSize(ringDiameter, ringDiameter)
         t:ClearAllPoints()
-        t:SetPoint("CENTER", r, "CENTER", p.x + ringX, p.y + ringY)
+        t:SetPoint("CENTER", r, "CENTER", p.x, p.y)
         ThugUI.RingArt:Apply(t, applyOpt)
         t:Show()
     end
@@ -388,6 +424,7 @@ function RP:Update()
     elseif ThugUI.Visibility then
         f:SetAlpha(ThugUI.Visibility:Alpha("resourcePips"))
     end
+    self:ApplyBodyAlpha()
     f:Show()
     self:UpdateRing()
 end
@@ -510,6 +547,7 @@ function RP:Initialize()
     driver:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     if ThugUI.Visibility then
+        ThugUI.Visibility:Register("resourcePipsBody", function() RP:ApplyBodyAlpha() end)
         ThugUI.Visibility:Register("resourcePips", function(alpha)
             if frame then frame:SetAlpha(Testing() and 1 or alpha) end
         end)

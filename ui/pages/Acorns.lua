@@ -41,12 +41,13 @@ local CHANNELS = {
     { key = "SYSTEM",  label = "System" },
 }
 
-function Page:Build(host, panel)
-    local db, chat, obj = DB()
 
+
+
+function Page:Build(host, panel)
     panel:Header("Acorns")
     panel:Note("Floating acorns that stand in for hidden UI elements. Click one to toggle "
-        .. "its element; shift-drag to move it.")
+        .. "its element; shift-drag to move it. Each acorn has its own page below this one.")
 
     panel:Section("General")
 
@@ -63,15 +64,36 @@ function Page:Build(host, panel)
         set = function(v) DB().locked = v end,
     }
 
-    
-    panel:Section("Chat acorn")
-
-    panel:Checkbox{
-        label = "Enable chat acorn",
-        get = function() local _, c = DB(); return c.enabled end,
-        set = function(v) local _, c = DB(); c.enabled = v end,
+    panel:Gap(8)
+    panel:Button{
+        label = "Reset acorn positions",
+        onClick = function()
+            local _, c, o = DB()
+            c.point, c.x, c.y = "BOTTOMLEFT", 25, 220
+            o.point, o.x, o.y = "TOPRIGHT", -260, -220
+            ApplyAnchors()
+            print("|cff00ff00ThugUI:|r Acorn positions reset.")
+        end,
     }
 
+end
+
+
+
+function Page:BuildChat(host, panel)
+    panel:Header("Chat acorn")
+    panel:Note("Stands in for the chat window. Left-click it to cycle the chat between the normal "
+        .. "window, a see-through stream box and hidden; right-click for its options.")
+
+    panel:FrameSection{
+        title = "Chat acorn",
+        enabled = {
+            get = function() local _, c = DB(); return c.enabled end,
+            set = function(v) local _, c = DB(); c.enabled = v end,
+        },
+    }
+
+    panel:SubSection("Acorn")
     panel:Dropdown{
         label = "Chat mode:",
         width = 170,
@@ -90,21 +112,26 @@ function Page:Build(host, panel)
     }
 
     panel:Slider{
-        label = "Stream font size", min = 8, max = 28, step = 1, format = "%d",
-        get = function() local _, c = DB(); return c.fontSize or 14 end,
-        set = function(v)
+        label = "Chat acorn size", min = 20, max = 64, step = 2, format = "%d",
+        get = function() local _, c = DB(); return c.size or 36 end,
+        set = function(v) local _, c = DB(); c.size = v; ApplyAnchors() end,
+    }
+    panel:Color{
+        label = "Chat acorn colour:",
+        get = function()
             local _, c = DB()
-            c.fontSize = v
-            local messageFrame = _G["ThugUI_StreamChatMessageFrame"]
-            if messageFrame then
-                messageFrame:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", v, c.fontOutline or "OUTLINE")
-            end
+            local col = c.color or {}
+            return col[1], col[2], col[3]
+        end,
+        set = function(r, g, b)
+            local _, c = DB()
+            c.color = { r, g, b, (c.color and c.color[4]) or 0.9 }
+            ApplyAnchors()
         end,
     }
 
-    
-    
-    
+
+    panel:SubSection("Stream")
     panel:Checkbox{
         label = "Unlock the stream (drag it, size it from its corner)",
         get = function() local _, c = DB(); return c.streamUnlocked end,
@@ -129,6 +156,19 @@ function Page:Build(host, panel)
         onClick = function() local module = Module(); if module and module.ResetStream then module:ResetStream() end end,
     }
 
+    panel:Slider{
+        label = "Stream font size", min = 8, max = 28, step = 1, format = "%d",
+        get = function() local _, c = DB(); return c.fontSize or 14 end,
+        set = function(v)
+            local _, c = DB()
+            c.fontSize = v
+            local messageFrame = _G["ThugUI_StreamChatMessageFrame"]
+            if messageFrame then
+                messageFrame:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", v, c.fontOutline or "OUTLINE")
+            end
+        end,
+    }
+
     panel:Checkbox{
         label = "Show timestamps",
         get = function() local _, c = DB(); return c.showTimestamp end,
@@ -139,6 +179,8 @@ function Page:Build(host, panel)
         end,
     }
 
+
+    panel:SubSection("Channels")
     panel:Label("Stream box channels:")
     panel:Note("Anything unticked is filtered out of the stream box. Trade/General is off "
         .. "by default because a city's Trade chat buries everything else. Chat is "
@@ -176,6 +218,33 @@ function Page:Build(host, panel)
     end
 
     
+    
+    
+    if ThugUI.Visibility then
+        ThugUI.Visibility:AddControls(panel, "acornStream", { split = true, moving = true, padReveal = true,
+            afterWhen = function(p)
+                p:Group("Stream rules (these win over everything on these tabs)")
+                p:Checkbox{
+                    label = "Always show in combat",
+                    tooltip = "In combat the stream box is fully shown, whatever Show, resting, moving or gamepad input would hide.",
+                    get = function() local _, c = DB(); return c.streamShowInCombat == true end,
+                    set = function(v)
+                        local _, c = DB(); c.streamShowInCombat = v and true or false
+                        local module = Module()
+                        if module and module.ApplyStreamVisibility then module:ApplyStreamVisibility() end
+                    end,
+                }
+            end })
+    end
+end
+
+
+function Page:BuildObjectives(host, panel)
+    panel:Header("Objectives acorn")
+    panel:Note("Stands in for Blizzard's quest and objectives tracker. Left-click the acorn to show "
+        .. "or hide the tracker; it stays where you put it, so the tracker is one click away. "
+        .. "Right-click for its options.")
+
     panel:Section("Objectives acorn")
 
     panel:Checkbox{
@@ -221,28 +290,6 @@ function Page:Build(host, panel)
         end,
     }
 
-    
-    panel:Section("Appearance")
-
-    panel:Slider{
-        label = "Chat acorn size", min = 20, max = 64, step = 2, format = "%d",
-        get = function() local _, c = DB(); return c.size or 36 end,
-        set = function(v) local _, c = DB(); c.size = v; ApplyAnchors() end,
-    }
-    panel:Color{
-        label = "Chat acorn colour:",
-        get = function()
-            local _, c = DB()
-            local col = c.color or {}
-            return col[1], col[2], col[3]
-        end,
-        set = function(r, g, b)
-            local _, c = DB()
-            c.color = { r, g, b, (c.color and c.color[4]) or 0.9 }
-            ApplyAnchors()
-        end,
-    }
-
     panel:Slider{
         label = "Objectives acorn size", min = 20, max = 64, step = 2, format = "%d",
         get = function() local _, _, o = DB(); return o.size or 36 end,
@@ -262,27 +309,41 @@ function Page:Build(host, panel)
         end,
     }
 
-    panel:Gap(8)
-    panel:Button{
-        label = "Reset acorn positions",
-        onClick = function()
-            local _, c, o = DB()
-            c.point, c.x, c.y = "BOTTOMLEFT", 25, 220
-            o.point, o.x, o.y = "TOPRIGHT", -260, -220
-            ApplyAnchors()
-            print("|cff00ff00ThugUI:|r Acorn positions reset.")
-        end,
-    }
-
 end
 
 ThugUI.Window:RegisterPage{
     id = "acorns",
+    
+    scopeKeys = { "Acorns" },
     category = "interface",
     order = 20,
     summary = "Acorns standing in for the hidden chat and objective tracker.",
     title = "Acorns",
     build = function(host, panel) Page:Build(host, panel) end,
+}
+
+ThugUI.Window:RegisterPage{
+    id = "acorns_chat",
+    
+    scopeKeys = { "Acorns" },
+    parent = "acorns",
+    category = "interface",
+    order = 21,
+    summary = "The chat acorn: chat mode, the stream box and its channels.",
+    title = "Chat acorn",
+    build = function(host, panel) Page:BuildChat(host, panel) end,
+}
+
+ThugUI.Window:RegisterPage{
+    id = "acorns_objectives",
+    
+    scopeKeys = { "Acorns" },
+    parent = "acorns",
+    category = "interface",
+    order = 22,
+    summary = "The objectives acorn: the quest tracker on a click.",
+    title = "Objectives acorn",
+    build = function(host, panel) Page:BuildObjectives(host, panel) end,
 }
 
 return Page

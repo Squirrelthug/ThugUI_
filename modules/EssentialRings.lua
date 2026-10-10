@@ -1883,16 +1883,24 @@ function ER:ReleaseECVAnchor()
     ER.ecvAnchored = false
 end
 
-function ER:StartGCDAnimation(startTime, duration)
+function ER:StartGCDAnimation(startTime, duration, obj)
     if not ER.GCDCooldownFrame then return end
     if not ER.enableGCD then return end
-    
+
     ER.isGCDAnimating = true
-    
+
     local fillDrain = ThugUI_Config.gcdFillDrain or "fill"
     ER.GCDCooldownFrame:SetReverse(fillDrain == "fill")
+
     
-    ER.GCDCooldownFrame:SetCooldown(startTime, duration)
+    
+    if obj and ER.GCDCooldownFrame.SetCooldownFromDurationObject then
+        ER.GCDCooldownFrame:SetCooldownFromDurationObject(obj)
+    elseif startTime and duration then
+        ER.GCDCooldownFrame:SetCooldown(startTime, duration)
+    else
+        return
+    end
     ER.GCDCooldownFrame:Show()
 end
 
@@ -1938,10 +1946,14 @@ function ER:GCDCastHandler(self, event, unit, spellName, spellId)
 
     ER.lastGCDTime = GetTime()
 
-    local GCDInfo = C_Spell.GetSpellCooldown(GCD_SPELL_ID)
-
-    if GCDInfo and GCDInfo.duration > 0 then
-        ER:StartGCDAnimation(GCDInfo.startTime, GCDInfo.duration)
+    
+    
+    
+    local CTm = ThugUI.CastTimer
+    if not CTm then return end
+    local running, start, duration, obj = CTm:ReadGCD()
+    if running then
+        ER:StartGCDAnimation(start, duration, obj)
     end
 end
 
@@ -2000,8 +2012,15 @@ function ER:UpdateVisibility(forceState)
     end
 
     local ringsVisible = false
+
     
-    if ThugUI_Config.showOnlyInCombat then
+    
+    
+    
+    if not ThugUI:IsModuleOn("rings") then
+        ThugUI_CursorFrame:Hide()
+        if ThugUI_Config.hideGameCursor then ER:RestoreGameCursor() end
+    elseif ThugUI_Config.showOnlyInCombat then
         if inCombat then
             ThugUI_CursorFrame:Show()
             ringsVisible = true
@@ -2161,7 +2180,8 @@ function ER:SetupUI()
     ThugUI_CursorFrame:SetAlpha(ER:CursorAlpha())
     ThugUI_CursorFrame:SetFrameStrata("HIGH")
     ThugUI_CursorFrame:SetToplevel(false)
-    ThugUI_CursorFrame:Show()
+    
+    ThugUI_CursorFrame:SetShown(ThugUI:IsModuleOn("rings"))
     ER:SetGroupScale(ER.currentGroupScale)
     ThugUI_CursorFrame.MainRing:Show()
     
@@ -2268,6 +2288,9 @@ function ER:OnInitialize()
                 ER:SetupUI()
             end
 
+        elseif event:match("^UNIT_SPELLCAST_") and not ThugUI:IsModuleOn("rings") then
+            
+            return
         elseif event == "UNIT_SPELLCAST_SENT" then
             
             
@@ -2291,6 +2314,8 @@ function ER:OnInitialize()
                 .. (ER.ecvContainer and (ER.ecvContainer:IsShown() and "SHOWN" or "HIDDEN") or "NIL"))
             ER:UpdateVisibility(false)
         elseif event == "SPELL_UPDATE_COOLDOWN" then
+            
+            if ThugUI:IsModuleOn("rings") then ER:GCDCastHandler(self, event) end
             ER:UpdateECVCooldowns()
             ER:UpdateBCVCooldowns()
             ER:UpdateGCVCooldowns()

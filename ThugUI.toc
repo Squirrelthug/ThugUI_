@@ -2,8 +2,9 @@
 ## Title: ThugUI
 ## Notes: Cursor-anchored cooldown grids, action bars, nameplates and unit frames for retail and WoW Forever
 ## Author: Thug
-## Version: 2.0.0
+## Version: 2.1.0
 ## IconTexture: Interface\AddOns\ThugUI\media\Acorn
+## X-Curse-Project-ID: 1734288
 ## SavedVariables: ThugUI_DebugLog ThugUI_BCVDump ThugUI_Profiles ThugUI_Packs ThugUI_Config ThugUIDB
 ## SavedVariablesPerCharacter: ThugUI_Character
 
@@ -21,7 +22,10 @@ modules\CombatClose.lua
 
 modules\Visibility.lua
 
+ui\Theme.lua
+ui\ThemePresets.lua
 ui\Widgets.lua
+ui\Dialog.lua
 ui\Window.lua
 
 modules\EssentialRings.lua
@@ -36,6 +40,8 @@ modules\MinimapButton.lua
 modules\ResourceRing.lua
 
 modules\RingArt.lua
+
+modules\CastTimer.lua
 
 modules\Orbs.lua
 
@@ -57,6 +63,10 @@ modules\Dialogue.lua
 modules\ControllerMode.lua
 
 modules\GamepadChat.lua
+
+modules\ControllerStream.lua
+
+modules\ControllerObjectives.lua
 
 modules\ControllerShortcuts.lua
 
@@ -90,6 +100,8 @@ modules\Prep.lua
 
 modules\ControllerRadial.lua
 
+modules\PadHints.lua
+
 modules\XPBar.lua
 
 modules\ResourcePips.lua
@@ -102,7 +114,12 @@ modules\OrbEffects.lua
 
 modules\ControllerLayout.lua
 
+modules\UnitMenu.lua
+ui\UnitMenu.lua
+
 modules\ControllerTarget.lua
+
+modules\PartyFrames.lua
 
 modules\MinimapPanel.lua
 
@@ -114,6 +131,7 @@ presets\TunedDefaults.lua
 
 ui\pages\Modules.lua
 ui\pages\Profiles.lua
+ui\pages\Themes.lua
 ui\pages\CooldownViewerGuide.lua
 ui\pages\CooldownViewer.lua
 ui\pages\Acorns.lua
@@ -140,7 +158,10 @@ ui\pages\Chat.lua
 ui\pages\ControllerLayout.lua
 ui\pages\XPBar.lua
 
+ui\pages\Auras.lua
+
 ui\pages\ControllerTarget.lua
+ui\pages\PartyFrames.lua
 
 ui\pages\Minimap.lua
 

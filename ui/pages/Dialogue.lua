@@ -107,6 +107,8 @@ end
 
 ThugUI.Window:RegisterPage{
     id = "dialogue",
+    
+    scopeKeys = { "Dialogue" },
     category = "ui",
     order = 70,
     summary = "Our own NPC dialogue window, one paragraph at a time.",

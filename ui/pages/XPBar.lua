@@ -75,21 +75,6 @@ local function Build(panel)
         end,
     }
 
-    panel:Part("Visibility")
-    panel:Dropdown{
-        label = "Show",
-        options = {
-            { text = "In controller mode", value = "controller" },
-            { text = "Always", value = "always" },
-        },
-        get = function() return ThugUIDB.XPBar and ThugUIDB.XPBar.show or "controller" end,
-        set = function(v)
-            ThugUIDB.XPBar.show = v
-            if ThugUI.XPBar then ThugUI.XPBar:Update() end
-        end,
-    }
-    if ThugUI.Visibility then ThugUI.Visibility:AddControls(panel, "xpBar") end
-
     panel:Part("Appearance")
     panel:Color{
         label = "Bar colour",
@@ -136,6 +121,25 @@ local function Build(panel)
             if ThugUI.XPBar then ThugUI.XPBar:Update() end
         end,
     }
+
+    
+    
+    
+    panel:FrameSection{ title = "Visibility" }
+    panel:Part("Visibility")
+    panel:Dropdown{
+        label = "Show",
+        options = {
+            { text = "In controller mode", value = "controller" },
+            { text = "Always", value = "always" },
+        },
+        get = function() return ThugUIDB.XPBar and ThugUIDB.XPBar.show or "controller" end,
+        set = function(v)
+            ThugUIDB.XPBar.show = v
+            if ThugUI.XPBar then ThugUI.XPBar:Update() end
+        end,
+    }
+    if ThugUI.Visibility then ThugUI.Visibility:AddControls(panel, "xpBar", { split = true }) end
 end
 
 ThugUI.Window:RegisterPage{

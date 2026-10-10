@@ -9,7 +9,7 @@ local ThugUI = _G.ThugUI
 local UF = {}
 ThugUI.UnitFrames = UF
 
-UF.TABLES = { "Orbs", "ResourcePips", "ControllerTarget", "Visibility" }
+UF.TABLES = { "Orbs", "ResourcePips", "ControllerTarget", "Visibility", "PartyFrames" }
 UF.base = {}
 UF.reset = {}
 
@@ -222,10 +222,10 @@ function UF:Reset(name)
         ThugUIDB.UnitFramesMouse[name] = nil
     end
     UF.reset[name] = true
-    StaticPopup_Show("THUGUI_UNITFRAMES_RELOAD")
+    ThugUI.Dialog:Show("THUGUI_UNITFRAMES_RELOAD")
 end
 
-StaticPopupDialogs["THUGUI_UNITFRAMES_RELOAD"] = {
+ThugUI.Dialogs["THUGUI_UNITFRAMES_RELOAD"] = {
     text = "ThugUI: reload to put these frames back to the controller setup?",
     button1 = "Reload now",
     button2 = "Later",

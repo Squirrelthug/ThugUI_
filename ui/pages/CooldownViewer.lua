@@ -198,7 +198,7 @@ local function BuildGrid(host)
     local frame = grid:CreateTexture(nil, "BACKGROUND")
     frame:SetPoint("TOPLEFT", -2, 2)
     frame:SetPoint("BOTTOMRIGHT", 2, -2)
-    frame:SetColorTexture(0, 0, 0, 0.55)
+    ThugUI.Theme:Paint(frame, "gridFrame", "fill")
 
     Page.cells = {}
 
@@ -213,11 +213,11 @@ local function BuildGrid(host)
 
             local border = cell:CreateTexture(nil, "BACKGROUND")
             border:SetAllPoints()
-            border:SetColorTexture(0.35, 0.35, 0.4, 0.5)
+            ThugUI.Theme:Paint(border, "gridCellBorder", "fill")
             local inner = cell:CreateTexture(nil, "BORDER")
             inner:SetPoint("TOPLEFT", 1, -1)
             inner:SetPoint("BOTTOMRIGHT", -1, 1)
-            inner:SetColorTexture(0.08, 0.08, 0.10, 0.9)
+            ThugUI.Theme:Paint(inner, "gridCellFill", "fill")
 
             local icon = cell:CreateTexture(nil, "ARTWORK")
             icon:SetPoint("TOPLEFT", 2, -2)
@@ -229,7 +229,7 @@ local function BuildGrid(host)
             local selected = cell:CreateTexture(nil, "OVERLAY")
             selected:SetPoint("TOPLEFT", -1, 1)
             selected:SetPoint("BOTTOMRIGHT", 1, -1)
-            selected:SetColorTexture(0, 1, 0.8, 0.35)
+            ThugUI.Theme:Paint(selected, "gridSelected", "fill")
             selected:Hide()
             cell.selectedTex = selected
 
@@ -315,7 +315,7 @@ function BuildAnchorOverlay(grid)
 
     local dim = overlay:CreateTexture(nil, "BACKGROUND")
     dim:SetAllPoints()
-    dim:SetColorTexture(0, 0, 0, 0.45)
+    ThugUI.Theme:Paint(dim, "gridDim", "fill")
 
     Page.anchorRadios = {}
 
@@ -358,7 +358,7 @@ function BuildAnchorOverlay(grid)
     local marker = markerHost:CreateTexture(nil, "OVERLAY")
     marker:SetSize(18, 18)
     marker:SetTexture("Interface\\AddOns\\ThugUI\\media\\Reticle_Dot")
-    marker:SetVertexColor(0, 1, 0.8, 1)
+    ThugUI.Theme:Paint(marker, "gridMarker", "vertex")
     Page.anchorMarker = marker
     Page.anchorMarkerHost = markerHost
 end
@@ -377,8 +377,8 @@ local function BuildPicker(host)
         tile = true, tileSize = 16, edgeSize = 12,
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
-    picker:SetBackdropColor(0, 0, 0, 0.4)
-    picker:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.6)
+    ThugUI.Theme:Paint(picker, "pickerFill", "backdrop")
+    ThugUI.Theme:Paint(picker, "pickerBorder", "border")
     Page.picker = picker
 
     Page.pickerSource = Page.pickerSource or "essential"
@@ -419,7 +419,7 @@ local function BuildPicker(host)
     
     
     
-    local empty = picker:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    local empty = ThugUI.Theme:Paint(picker:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontDisable")), "note")
     empty:SetPoint("TOPLEFT", scroll, "TOPLEFT", 4, -10)
     empty:SetWidth(PICKER_WIDTH - 44)
     empty:SetJustifyH("LEFT")
@@ -444,7 +444,7 @@ local function AcquirePickerRow(index)
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     row.icon = icon
 
-    local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local label = ThugUI.Theme:Paint(row:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlightSmall")), "listItem")
     label:SetPoint("LEFT", icon, "RIGHT", 6, 0)
     label:SetPoint("RIGHT", row, "RIGHT", -4, 0)
     label:SetJustifyH("LEFT")
@@ -453,7 +453,7 @@ local function AcquirePickerRow(index)
 
     local armed = row:CreateTexture(nil, "BACKGROUND")
     armed:SetAllPoints()
-    armed:SetColorTexture(0, 1, 0.8, 0.25)
+    ThugUI.Theme:Paint(armed, "gridArmed", "fill")
     armed:Hide()
     row.armedTex = armed
 
@@ -588,11 +588,11 @@ function Page:Build(host, panel)
     self.host = host
     self.editSpecID = self.editSpecID or Data.GetActiveSpecID()
 
-    local title = host:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local title = ThugUI.Theme:Paint(host:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormalLarge")), "pageTitle")
     title:SetPoint("TOPLEFT", 0, -4)
     title:SetText("Cooldown Viewer")
 
-    local subtitle = host:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    local subtitle = ThugUI.Theme:Paint(host:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontDisable")), "pageContext")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
     subtitle:SetWidth(700)
     subtitle:SetJustifyH("LEFT")
@@ -628,7 +628,7 @@ function Page:Build(host, panel)
         local cb = CreateFrame("CheckButton", nil, host, "UICheckButtonTemplate")
         cb:SetSize(24, 24)
         cb:SetPoint("TOPLEFT", host, "TOPLEFT", x, -62)
-        local text = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        local text = ThugUI.Theme:Paint(cb:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "label")
         text:SetPoint("LEFT", cb, "RIGHT", 4, 0)
         text:SetText(label)
         cb:SetScript("OnClick", function(self)
@@ -704,7 +704,7 @@ local BAND_COL_3 = 552
 
 
 
-StaticPopupDialogs["THUGUI_CV_CLEAR_LAYOUT"] = {
+ThugUI.Dialogs["THUGUI_CV_CLEAR_LAYOUT"] = {
     text = "Remove every icon from %s's layout? Other specs are untouched.",
     button1 = YES,
     button2 = NO,
@@ -735,7 +735,7 @@ function Page:BuildInspector(host)
 
     right:Section("Selected icon")
 
-    local sel = host:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local sel = ThugUI.Theme:Paint(host:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "label")
     sel:SetWidth(200)
     sel:SetJustifyH("LEFT")
     right:Place(sel, 34, { gap = 4 })
@@ -894,7 +894,7 @@ function Page:BuildInspector(host)
         width = 200,
         tooltip = "Remove every icon from this spec's grid. Does not touch other specs.",
         onClick = function()
-            StaticPopup_Show("THUGUI_CV_CLEAR_LAYOUT", Data.GetSpecName(Page.editSpecID))
+            ThugUI.Dialog:Show("THUGUI_CV_CLEAR_LAYOUT", Data.GetSpecName(Page.editSpecID))
         end,
     }
 end

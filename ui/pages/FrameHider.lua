@@ -103,18 +103,8 @@ function Page:Build(host, panel)
         end,
     }
 
-    panel:Section("Diagnostics")
-
-    panel:Checkbox{
-        label = "Debug mode",
-        tooltip = "Aura logging and init chatter into ThugUI_DebugLog. Also /thugdebug.",
-        get = function() return Cfg().debugMode end,
-        set = function(v)
-            Cfg().debugMode = v
-            local ER = ThugUI.EssentialRings
-            if ER and ER.SetDebugMode then ER:SetDebugMode(v) end
-        end,
-    }
+    
+    
 end
 
 ThugUI.Window:RegisterPage{

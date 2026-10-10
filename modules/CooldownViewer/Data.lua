@@ -450,12 +450,6 @@ function Data.GetActiveProfile()
     return Data.GetProfile(Data.GetActiveSpecID())
 end
 
-function Data.ResetProfile(specID)
-    specID = specID or Data.GetActiveSpecID()
-    if not specID then return end
-    Store().profiles[specID] = DefaultProfile()
-end
-
 
 
 function Data.GetPlacements(profile)
@@ -547,17 +541,6 @@ function Data.IsSpellPlaced(profile, spellID, mode)
         end
     end
     return false
-end
-
-
-function Data.FindFreeCell(profile)
-    for row = 1, Data.GRID_ROWS do
-        for col = 1, Data.GRID_COLS do
-            if not profile.placements[Data.CellKey(row, col)] then
-                return row, col
-            end
-        end
-    end
 end
 
 
@@ -1353,17 +1336,6 @@ function Data.BuildSpellList(source, search)
 
     table.sort(entries, function(a, b) return a.name < b.name end)
     return entries
-end
-
-
-function Data.ResolveSpell(query)
-    local spellID = tonumber(query)
-    if not spellID then
-        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(query)
-        spellID = info and info.spellID
-    end
-    if not spellID then return nil end
-    return SpellEntry(spellID)
 end
 
 

@@ -85,7 +85,7 @@ end
 local function Check(parent, onClick)
     local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     cb:SetSize(24, 24)
-    local label = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local label = ThugUI.Theme:Paint(cb:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlightSmall")), "label")
     label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
     cb.label = label
     cb:SetScript("OnClick", onClick)
@@ -154,7 +154,7 @@ local function ChannelRow(i)
     local row = UI.chanRows[i]
     if row then return row end
     row = {}
-    row.label = UI.host:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    row.label = ThugUI.Theme:Paint(UI.host:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "label")
     row.leave = Button(UI.host, "Leave", 60, function()
         if row.channel then UI.Leave(row.channel) end
         
@@ -282,7 +282,7 @@ local function BuildTabsUI(panel)
         UI.editing = #Tabs()
         Rebuild(); UI.Layout()
     end)
-    UI.editTitle = host:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    UI.editTitle = ThugUI.Theme:Paint(host:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "section")
     UI.catChecks = {}
     for k, cat in ipairs(CATEGORIES) do
         local cb = Check(host, function(self)
@@ -296,7 +296,7 @@ local function BuildTabsUI(panel)
         if W and W.AttachTooltip then W.AttachTooltip(cb, cat.title, cat.tip) end
         UI.catChecks[k] = cb
     end
-    UI.chanTitle = host:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    UI.chanTitle = ThugUI.Theme:Paint(host:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "section")
     UI.chanTitle:SetText("Channels")
     UI.joinBox = CreateFrame("EditBox", nil, host, "InputBoxTemplate")
     UI.joinBox:SetSize(130, 22)
@@ -309,7 +309,7 @@ local function BuildTabsUI(panel)
     UI.joinBox:SetScript("OnEnterPressed", DoJoin)
     UI.joinBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     UI.joinButton = Button(host, "Join", 60, DoJoin)
-    UI.chanNote = host:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    UI.chanNote = ThugUI.Theme:Paint(host:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontDisableSmall")), "note")
     UI.chanNote:SetWidth(panel.width - 20)
     UI.chanNote:SetJustifyH("LEFT")
     UI.chanNote:SetText("Joining adds the channel to chat window 1, as /join does, so its "
@@ -365,6 +365,40 @@ local function Build(panel)
     
     
     
+    local gp = ThugUI.ControllerMode and ThugUI.ControllerMode:CreateGamepadUIButton(panel.parent, 220)
+    if gp then
+        gp.labelText = "Turn on Gamepad UI"
+        panel:Place(gp, 28)
+        if panel.Index then panel:Index("Turn on Blizzard's Gamepad UI", gp, "control") end
+    else
+        panel:Note("Turn Blizzard's Gamepad UI on in Options > Gamepad > Enable Gamepad UI.")
+    end
+
+    
+    
+    
+    
+    
+    
+    
+    panel:Note("Compact action bar (only the active button set): Blizzard moved it into Edit Mode. "
+        .. "With the Gamepad UI on, open Edit Mode, select the controller action bar and tick Compact.")
+    if not (InCombatLockdown and InCombatLockdown()) then
+        local em = CreateFrame("Button", nil, panel.parent, "SecureActionButtonTemplate,UIPanelButtonTemplate")
+        em:SetSize(220, 24)
+        em:SetText("Open Edit Mode")
+        em.labelText = "Open Edit Mode"
+        em:RegisterForClicks("AnyUp", "AnyDown")
+        em:SetAttribute("type", "macro")
+        em:SetAttribute("useOnKeyDown", false)
+        em:SetAttribute("macrotext", (_G.SLASH_EDITMODE1 or "/editmode"))
+        panel:Place(em, 28)
+        if panel.Index then panel:Index("Compact action bar (Edit Mode)", em, "control") end
+    end
+
+    
+    
+    
     panel:Checkbox{
         label = "Use the controller chat window",
         tooltip = "Off: the chat acorn manages chat again, or Blizzard's chat if the acorn is off.",
@@ -394,48 +428,43 @@ local function Build(panel)
         "Off: Blizzard's target frame is left alone. If ThugUI already switched it off this session, /reload brings it back.")
     panel:Checkbox{
         label = "Hide the objective tracker",
-        tooltip = "The focused quest above the minimap stands in for it, and D-pad up "
-            .. "on the L1+R1 shortcuts shows the tracker while it is selected. Off: "
-            .. "the tracker and its acorn are back as you left them.",
+        tooltip = "The tracker stays invisible until you select it with D-pad up "
+            .. "on the L1+R1 shortcuts, and the focused quest above the minimap stands "
+            .. "in for it. Off: Blizzard's tracker shows as normal.",
+        
+        
         get = function()
-            local c = ThugUIDB.Acorns and ThugUIDB.Acorns.objectives
-            return not (c and c.controllerHide == false)
+            local c = ThugUIDB.ControllerObjectives
+            return not (c and c.enabled == false)
         end,
         set = function(v)
-            local db = ThugUIDB.Acorns
-            if not (db and db.objectives) then return end
-            db.objectives.controllerHide = v and true or false
+            ThugUIDB.ControllerObjectives = ThugUIDB.ControllerObjectives or {}
+            ThugUIDB.ControllerObjectives.enabled = v and true or false
             if ThugUI.ControllerMode then ThugUI.ControllerMode:NotifyFeature("objectives") end
         end,
     }
     TargetSwitch("tot", "Use the controller target-of-target frame",
         "Off: your own Target of Target frame (its page) takes over again, or Blizzard's if that is off.")
-    panel:Checkbox{
-        label = "Map on the shortcuts' bottom face button",
-        tooltip = "Blizzard leaves that button empty on the shortcuts bar; this makes it open the world map. "
-            .. "Off: the button is disabled again, as Blizzard has it.",
-        
-        
-        get = function() return not (ThugUIDB.ControllerMode and ThugUIDB.ControllerMode.mapShortcut == false) end,
-        set = function(v)
-            ThugUIDB.ControllerMode = ThugUIDB.ControllerMode or {}
-            ThugUIDB.ControllerMode.mapShortcut = v and true or false
-            if ThugUI.ControllerMode then ThugUI.ControllerMode:NotifyFeature("mapShortcut") end
-        end,
-    }
-    panel:Checkbox{
-        label = "Hide buffs and debuffs; aura window",
-        tooltip = "Hides Blizzard's buff/debuff frames and enables the Aura window.",
-        get = function() 
-            local db = ThugUIDB.AuraWindow
-            return not (db and db.enabled == false)
-        end,
-        set = function(v)
-            ThugUIDB.AuraWindow = ThugUIDB.AuraWindow or {}
-            ThugUIDB.AuraWindow.enabled = v and true or false
-            if ThugUI.ControllerMode then ThugUI.ControllerMode:NotifyFeature("auras") end
-        end,
-    }
+    
+    
+    
+    if not (ThugUI.ControllerShortcuts and ThugUI.ControllerShortcuts.PAUSED) then
+        panel:Checkbox{
+            label = "Map on the shortcuts' bottom face button",
+            tooltip = "Blizzard leaves that button empty on the shortcuts bar; this makes it open the world map. "
+                .. "Off: the button is disabled again, as Blizzard has it.",
+            
+            
+            get = function() return not (ThugUIDB.ControllerMode and ThugUIDB.ControllerMode.mapShortcut == false) end,
+            set = function(v)
+                ThugUIDB.ControllerMode = ThugUIDB.ControllerMode or {}
+                ThugUIDB.ControllerMode.mapShortcut = v and true or false
+                if ThugUI.ControllerMode then ThugUI.ControllerMode:NotifyFeature("mapShortcut") end
+            end,
+        }
+    end
+    
+    
 
 
     
@@ -551,11 +580,128 @@ local function Build(panel)
         end,
     }
 
+    
+    
+    
+    local function CS() return ThugUI.ControllerStream end
+    local function SCfg() return CS() and CS():Cfg() or (ThugUIDB.ControllerStream or {}) end
+    local function SApply() if CS() then CS():ApplySettings() end end
+    panel:FrameSection{
+        title = "Chat stream",
+        enabled = {
+            get = function() return SCfg().enabled ~= false end,
+            set = function(v) SCfg().enabled = v and true or false; SApply() end,
+        },
+        unlock = {
+            get = function() return CS() and CS().unlocked end,
+            set = function(v) if CS() then CS():SetUnlocked(v) end end,
+        },
+        reset = function() if CS() then CS():ResetPosition() end end,
+    }
+    
+    
+    panel:SubSection("Size & look")
+    panel:Note("Recent chat lines while the controller chat window is closed; it hides while the "
+        .. "window is open. Tick Unlock to drag it into place. Separate from the chat acorn's stream.")
+    panel:Part("Size & position")
+    panel:Slider{
+        label = "Stream width",
+        min = 200, max = 900, step = 10, format = "%d",
+        get = function() return SCfg().width or 420 end,
+        set = function(v) SCfg().width = v; SApply() end,
+    }
+    panel:Slider{
+        label = "Stream height",
+        min = 60, max = 600, step = 10, format = "%d",
+        get = function() return SCfg().height or 150 end,
+        set = function(v) SCfg().height = v; SApply() end,
+    }
+    panel:Part("Appearance")
+    panel:Slider{
+        label = "Stream font size",
+        min = 9, max = 24, step = 1, format = "%d",
+        get = function() return SCfg().fontSize or 13 end,
+        set = function(v) SCfg().fontSize = v; SApply() end,
+    }
+    panel:Slider{
+        label = "Stream background opacity",
+        min = 0, max = 1, step = 0.05, format = "%.2f",
+        get = function() return SCfg().bgAlpha or 0 end,
+        set = function(v) SCfg().bgAlpha = v; SApply() end,
+    }
+    panel:SubSection("Lines")
+    panel:Part("Content")
+    panel:Checkbox{
+        label = "Stream timestamps",
+        get = function() return SCfg().timestamps end,
+        set = function(v) SCfg().timestamps = v and true or false end,
+    }
+    panel:Checkbox{
+        label = "Lines fade",
+        get = function() return SCfg().fade ~= false end,
+        set = function(v) SCfg().fade = v and true or false; SApply() end,
+    }
+    panel:Slider{
+        label = "Lines fade after (seconds)",
+        min = 5, max = 120, step = 5, format = "%d",
+        get = function() return SCfg().fadeAfter or 20 end,
+        set = function(v) SCfg().fadeAfter = v; SApply() end,
+    }
+    panel:SubSection("What shows")
+    panel:Part("Content")
+    for _, cat in ipairs(CATEGORIES) do
+        local id = cat.id
+        panel:Checkbox{
+            label = "Stream: " .. cat.title,
+            tooltip = cat.tip,
+            get = function() return SCfg().show and SCfg().show[id] end,
+            set = function(v) SCfg().show = SCfg().show or {}; SCfg().show[id] = v and true or false end,
+        }
+    end
+    panel:Checkbox{
+        label = "Stream: every channel (Trade, General...)",
+        tooltip = "Off: only the channels ticked below.",
+        get = function() return SCfg().allChannels ~= false end,
+        set = function(v) SCfg().allChannels = v and true or false end,
+    }
+    local okList, list = pcall(function() return { GetChannelList() } end)
+    if okList and type(list) == "table" then
+        
+        
+        for i = 2, #list, 3 do
+            local name = list[i]
+            if type(name) == "string" and not (issecretvalue and issecretvalue(name)) then
+                panel:Checkbox{
+                    label = "Stream channel: " .. name,
+                    get = function() return SCfg().channels and SCfg().channels[name] end,
+                    set = function(v) SCfg().channels = SCfg().channels or {}; SCfg().channels[name] = v and true or nil end,
+                }
+            end
+        end
+    end
+    
+    
+    
+    if ThugUI.Visibility then
+        ThugUI.Visibility:AddControls(panel, "controllerStream", { split = true, moving = true, padReveal = true,
+            afterWhen = function(p)
+                p:Group("Stream rules (these win over everything on these tabs)")
+                p:Checkbox{
+                    label = "Always show in combat",
+                    tooltip = "In combat the stream is fully shown, whatever Show, resting, moving or gamepad input would hide.",
+                    get = function() return SCfg().showInCombat == true end,
+                    set = function(v) SCfg().showInCombat = v and true or false; if CS() then CS():ApplyVisibility() end end,
+                }
+            end })
+    end
+
     BuildTabsUI(panel)
 end
 
 ThugUI.Window:RegisterPage{
     id = "chat",
+    
+    scopeKeys = { "GamepadChat", "ControllerStream", "ControllerObjectives" },
     category = "controller",
     order = 10,
     title = "Mode & chat",

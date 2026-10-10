@@ -237,6 +237,10 @@ local function InCombat()
 end
 
 function CP:ShouldShow()
+    
+    
+    
+    if not ThugUI:IsModuleOn("rings") then return false end
     if not ThugUI_Config.showComboPips then return false end
     if not ThugUI_CursorFrame then return false end
 

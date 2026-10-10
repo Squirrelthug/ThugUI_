@@ -172,7 +172,7 @@ function Page:Build(host, panel)
         sameLine = true,
         onClick = function()
             if Page.copyFrom then
-                StaticPopup_Show("THUGUI_PROFILE_OVERWRITE", P.active, Page.copyFrom)
+                ThugUI.Dialog:Show("THUGUI_PROFILE_OVERWRITE", P.active, Page.copyFrom)
             end
         end,
     }
@@ -181,7 +181,7 @@ function Page:Build(host, panel)
         label = "Reset this profile to defaults",
         width = 220,
         onClick = function()
-            StaticPopup_Show("THUGUI_PROFILE_RESET", P.active)
+            ThugUI.Dialog:Show("THUGUI_PROFILE_RESET", P.active)
         end,
     }
 
@@ -210,8 +210,71 @@ function Page:Build(host, panel)
         sameLine = true,
         onClick = function()
             if Page.deleteTarget then
-                StaticPopup_Show("THUGUI_PROFILE_DELETE", Page.deleteTarget)
+                ThugUI.Dialog:Show("THUGUI_PROFILE_DELETE", Page.deleteTarget)
             end
+        end,
+    }
+
+    
+    panel:Section("Share")
+    panel:Note(("Share your setup as a line of text, or bring in someone else's. A string starts with THUG, "
+        .. "the version's first number and the game: THUG%dR: is retail, THUG%dF: is WoW Forever. It imports "
+        .. "only into the same game and the same first number. Importing always makes a new profile; "
+        .. "nothing of yours is replaced."):format(P.Major(), P.Major()))
+    
+    
+    panel:Note(("Your layout also depends on Blizzard's Edit Mode. Share that too: in Edit Mode, open the "
+        .. "layout menu and choose %s, then %s. The other player uses %s in the same menu.")
+        :format(_G.HUD_EDIT_MODE_SHARE_LAYOUT or "Share Layout",
+            _G.HUD_EDIT_MODE_COPY_TO_CLIPBOARD or "Copy to Clipboard",
+            _G.HUD_EDIT_MODE_IMPORT_LAYOUT or "Import Layout"))
+
+    panel:Button{
+        label = "Make a string of this profile",
+        width = 230,
+        onClick = function()
+            local str, reason = P:Export()
+            Page.exportText = str or ""
+            if not str then Warn(P:ShareReasonText(reason)) end
+            if Page.widgets.export then
+                Page.widgets.export:Refresh()
+                Page.widgets.export.edit:SetFocus()
+                Page.widgets.export.edit:HighlightText()
+            end
+        end,
+    }
+    Page.widgets.export = panel:TextArea{
+        label = "This profile as a string (click it, then Ctrl+C):",
+        height = 70, readOnly = true,
+        get = function() return Page.exportText or "" end,
+    }
+
+    Page.widgets.import = panel:TextArea{
+        label = "Paste a string here to import it:",
+        height = 70,
+        onTextChanged = function(t) Page.importText = t end,
+        get = function() return Page.importText or "" end,
+    }
+    Page.widgets.importName = panel:EditBox{
+        label = "Name for the new profile:",
+        width = 200,
+        tooltip = "Left empty, it takes the name the profile had, with (imported) after it.",
+        get = function() return Page.importName or "" end,
+        set = function(v) Page.importName = v end,
+        onTextChanged = function(v) Page.importName = v end,
+    }
+    panel:Button{
+        label = "Import as a new profile",
+        width = 200,
+        onClick = function()
+            local name, reason, major = P:Import(Page.importText, Page.importName)
+            if not name then
+                Warn(P:ShareReasonText(reason, major))
+                return
+            end
+            Page.importText, Page.importName = "", ""
+            Page:Refresh()
+            ThugUI.Dialog:Show("THUGUI_PROFILE_IMPORTED", name, nil, name)
         end,
     }
 
@@ -275,7 +338,7 @@ end
 
 
 
-StaticPopupDialogs["THUGUI_PROFILE_OVERWRITE"] = {
+ThugUI.Dialogs["THUGUI_PROFILE_OVERWRITE"] = {
     text = "Overwrite every setting in |cffffd100%s|r with a copy of |cffffd100%s|r? This cannot be undone.",
     button1 = "Overwrite",
     button2 = "Cancel",
@@ -293,7 +356,7 @@ StaticPopupDialogs["THUGUI_PROFILE_OVERWRITE"] = {
     preferredIndex = 3,
 }
 
-StaticPopupDialogs["THUGUI_PROFILE_RESET"] = {
+ThugUI.Dialogs["THUGUI_PROFILE_RESET"] = {
     text = "Reset every setting in |cffffd100%s|r to defaults? This cannot be undone.",
     button1 = "Reset",
     button2 = "Cancel",
@@ -310,7 +373,23 @@ StaticPopupDialogs["THUGUI_PROFILE_RESET"] = {
     preferredIndex = 3,
 }
 
-StaticPopupDialogs["THUGUI_PROFILE_DELETE"] = {
+ThugUI.Dialogs["THUGUI_PROFILE_IMPORTED"] = {
+    text = "Imported as |cffffd100%s|r. Switch this character to it now? The UI reloads to load it. "
+        .. "Cancel keeps it in the list for later.",
+    button1 = "Switch and reload",
+    button2 = "Cancel",
+    OnAccept = function(self, data)
+        local P = ThugUI.Profiles
+        if P and data then P:SwitchAndReload(data) end
+        Page:Refresh()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+ThugUI.Dialogs["THUGUI_PROFILE_DELETE"] = {
     text = "Delete the profile |cffffd100%s|r? Characters assigned to it will move to Default.",
     button1 = "Delete",
     button2 = "Cancel",

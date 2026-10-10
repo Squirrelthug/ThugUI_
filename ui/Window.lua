@@ -22,6 +22,9 @@ ThugUI.Window = Window
 
 local W  
 
+local function Paint(obj, role, how) return ThugUI.Theme:Paint(obj, role, how) end
+
+
 
 
 
@@ -86,7 +89,7 @@ function Window:RegisterCategory(def)
                 if not row then
                     local btn = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
                     btn:SetSize(180, 24)
-                    local note = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    local note = Paint(box:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlightSmall")), "pageContext")
                     note:SetPoint("LEFT", btn, "RIGHT", 12, 0)
                     note:SetWidth(host.overviewWidth - 200)
                     note:SetJustifyH("LEFT")
@@ -126,12 +129,36 @@ function Window:VisiblePages(catID)
     return list
 end
 
+
+
+
+function Window:ChildPages(pageID)
+    local list = {}
+    local parent = self.pagesByID[pageID]
+    if not parent then return list end
+    for _, def in ipairs(self.pages) do
+        if def.parent == pageID and def.category == parent.category
+            and not (ThugUI.Modules and not ThugUI.Modules:PageOn(def.id)) then
+            list[#list + 1] = def
+        end
+    end
+    return list
+end
+
+
+function Window:IsChildPage(def)
+    local parent = def.parent and self.pagesByID[def.parent]
+    if not parent or parent.category ~= def.category then return false end
+    return not (ThugUI.Modules and not ThugUI.Modules:PageOn(parent.id))
+end
+
 Window:RegisterCategory{ id = "general", title = "General", order = 1 }
 Window:RegisterCategory{ id = "controller", title = "Controller", order = 2 }
 Window:RegisterCategory{ id = "combat", title = "Combat HUD", order = 3 }
 Window:RegisterCategory{ id = "ui", title = "UI", order = 3.5 }
 Window:RegisterCategory{ id = "interface", title = "Interface", order = 4 }
-Window:RegisterCategory{ id = "orbeffects", title = "Orb effects", order = 5 }
+
+
 
 
 
@@ -180,23 +207,23 @@ local function CreateNavButton(parent, text)
 
     local bg = btn:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    bg:SetColorTexture(1, 1, 1, 0.08)
+    Paint(bg, "selectedFill", "fill")
     bg:Hide()
     btn.selectedBG = bg
 
     local hl = btn:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.10)
+    Paint(hl, "highlight", "fill")
 
     local accent = btn:CreateTexture(nil, "ARTWORK")
     accent:SetPoint("TOPLEFT", 0, 0)
     accent:SetPoint("BOTTOMLEFT", 0, 0)
     accent:SetWidth(3)
-    accent:SetColorTexture(0.0, 1.0, 0.8, 0.9)
+    Paint(accent, "navAccent", "fill")
     accent:Hide()
     btn.accent = accent
 
-    local label = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local label = Paint(btn:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "navPage")
     label:SetPoint("LEFT", 12, 0)
     label:SetJustifyH("LEFT")
     label:SetText(text)
@@ -205,11 +232,12 @@ local function CreateNavButton(parent, text)
     function btn:SetSelected(selected)
         self.selectedBG:SetShown(selected)
         self.accent:SetShown(selected)
-        if selected then
-            self.label:SetTextColor(1, 1, 1)
-        else
-            self.label:SetTextColor(0.75, 0.75, 0.75)
-        end
+        
+        
+        
+        
+        
+        Paint(self.label, selected and "navSelected" or (self.nested and "navNested:navCategory" or "navPage:navCategory"))
     end
     btn:SetSelected(false)
 
@@ -246,22 +274,24 @@ function Window:CreateWindow()
         tile = true, tileSize = 32, edgeSize = 24,
         insets = { left = 6, right = 6, top = 6, bottom = 6 },
     })
-    f:SetBackdropColor(0.04, 0.04, 0.06, 0.96)
+    Paint(f, "background", "backdrop")
+    Paint(f, "border", "border")
 
     
     tinsert(UISpecialFrames, "ThugUI_ConfigWindow")
 
     
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    
+    local title = Paint(f:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormalLarge")), "windowTitle")
     title:SetPoint("TOPLEFT", 20, -16)
-    title:SetText("|cff00ffccThugUI|r")
+    title:SetText("ThugUI")
 
-    local version = f:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+    local version = Paint(f:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontDisable")), "windowVersion")
     version:SetPoint("LEFT", title, "RIGHT", 8, -1)
     version:SetText("v" .. (ThugUI.version or "1.0.0"))
 
     local headerRule = f:CreateTexture(nil, "ARTWORK")
-    headerRule:SetColorTexture(0.4, 0.4, 0.4, 0.4)
+    Paint(headerRule, "ruleHeader", "fill")
     headerRule:SetHeight(1)
     headerRule:SetPoint("TOPLEFT", 14, -HEADER_HEIGHT)
     headerRule:SetPoint("TOPRIGHT", -14, -HEADER_HEIGHT)
@@ -312,44 +342,110 @@ function Window:CreateWindow()
     f.searchBox = search
 
     
-    local scopeLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    scopeLabel:SetText("Scope")
-    scopeLabel:SetPoint("RIGHT", search, "LEFT", -180, 0)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    local scopeLabel = CreateFrame("Button", nil, f)
+    scopeLabel:SetSize(130, 22)
+    local scopeLabelText = Paint(scopeLabel:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "headerLabel")
+    scopeLabelText:SetPoint("RIGHT")
+    scopeLabelText:SetJustifyH("RIGHT")
+    scopeLabelText:SetWidth(130)
+    if scopeLabelText.SetMaxLines then scopeLabelText:SetMaxLines(1) end
+    if scopeLabelText.SetWordWrap then scopeLabelText:SetWordWrap(false) end
+    scopeLabel.text = scopeLabelText
+    function scopeLabel:Refresh()
+        local name = ThugUI.Profiles and ThugUI.Profiles.active or "?"
+        self.text:SetText("Profile: " .. tostring(name) .. " \226\128\186")
+    end
+    scopeLabel:SetScript("OnClick", function() Window:SelectPage("profiles") end)
+    W.AttachTooltip(scopeLabel, "Profile and scope", "This character uses this profile. Inside it, each page's "
+        .. "settings are Shared by every character, kept per faction, or kept for this character: the buttons "
+        .. "to the right. Click to manage profiles.")
+    scopeLabel:Refresh()
     f.scopeLabel = scopeLabel
 
-    local scopeDropdown = W.CreateDropdown(f, 160, function()
-        return {
-            { text = ThugUI.Profiles:ScopeLabel("shared"), value = "shared" },
-            { text = ThugUI.Profiles:ScopeLabel("faction"), value = "faction" },
-            { text = ThugUI.Profiles:ScopeLabel("character"), value = "character" },
-        }
-    end, function()
-        local def = Window.pagesByID[Window.activePageID]
-        if def and def.scopeKeys then
-            return ThugUI.Profiles:ScopeOf(def.scopeKeys[1])
-        end
-        return "shared"
-    end, function(val)
-        local def = Window.pagesByID[Window.activePageID]
-        if not def or not def.scopeKeys then return end
+    local SCOPE_ORDER = { "shared", "faction", "character" }
+    local function ScopeText(scope)
+        if scope == "shared" then return "Shared" end
         
-        if val == "shared" then
-            StaticPopup_Show("THUGUI_SCOPE_SHARED", nil, nil, def.scopeKeys)
-        else
+        if scope == "faction" then return "Faction" end
+        return "Character"
+    end
+    local scopeButtons = {}
+    for _, scope in ipairs(SCOPE_ORDER) do
+        local b = W.CreateStateButton(f, ScopeText(scope))
+        b.scope = scope
+        b:SetScript("OnClick", function(self)
+            local def = Window.pagesByID[Window.activePageID]
+            if not (def and def.scopeKeys) then return end
+            if ThugUI.Profiles:ScopeOf(def.scopeKeys[1]) == self.scope then return end
+            local switched = false
             for _, key in ipairs(def.scopeKeys) do
-                local ok, err = ThugUI.Profiles:SetScope(key, val)
+                local ok, err = ThugUI.Profiles:SetScope(key, self.scope)
+                if ok then switched = true end
                 if not ok and err == "unresolved" then
                     print("ThugUI: your faction is not known yet; try again after login.")
                 end
             end
-            if f.scopeDropdown then
-                f.scopeDropdown:Refresh()
-            end
+            Window:RefreshScopeButtons()
+            if switched then ThugUI.Profiles:PromptScopeReload(def.title, self.scope) end
+        end)
+        W.AttachTooltip(b, ScopeText(scope), scope == "shared"
+            and "Settings every character on this profile uses."
+            or scope == "faction" and "This page's own settings for every character of your faction."
+            or "This page's own settings for this character only.")
+        scopeButtons[#scopeButtons + 1] = b
+    end
+    
+    
+    
+    
+    
+    scopeButtons[#scopeButtons]:SetPoint("RIGHT", search, "LEFT", -24, 0)
+    for i = #scopeButtons - 1, 1, -1 do
+        scopeButtons[i]:SetPoint("RIGHT", scopeButtons[i + 1], "LEFT", -2, 0)
+    end
+    scopeLabel:SetPoint("RIGHT", scopeButtons[1], "LEFT", -8, 0)
+    f.scopeButtons = scopeButtons
+
+    
+    
+    
+    
+    local copyDropdown = W.CreateDropdown(f, 130, function()
+        local def = Window.pagesByID[Window.activePageID]
+        if not (def and def.scopeKeys) then return {} end
+        return ThugUI.Profiles:CopySources(def.scopeKeys[1])
+    end, function() return nil end, function(val)
+        local def = Window.pagesByID[Window.activePageID]
+        if not (def and def.scopeKeys) then return end
+        local text = val
+        for _, row in ipairs(ThugUI.Profiles:CopySources(def.scopeKeys[1])) do
+            if row.value == val then text = row.text end
         end
+        local here = "the " .. ThugUI.Profiles:ScopeButtonName(ThugUI.Profiles:ScopeOf(def.scopeKeys[1])) .. " settings"
+        ThugUI.Dialog:Show("THUGUI_SCOPE_COPY", text, here,
+            { keys = def.scopeKeys, id = val, pageTitle = def.title, sourceText = text })
     end)
-    scopeDropdown:SetPoint("LEFT", scopeLabel, "RIGHT", 8, -1)
-    W.AttachTooltip(scopeDropdown, "Scope", "Shared settings apply to every character on this profile. Faction or character keeps your own copy of this page, for example a layout that fits the other faction's bar art.")
-    f.scopeDropdown = scopeDropdown
+    function copyDropdown:Refresh() self.text:SetText("Choose a layer") end
+    copyDropdown:Refresh()
+    copyDropdown:SetPoint("RIGHT", scopeLabel, "LEFT", -16, -1)
+    W.AttachTooltip(copyDropdown, "Copy from", "Replace this page's settings in the scope you are on with a copy of another layer's: Shared, a faction, or a character with its own copy. Asks first. Nothing stays linked afterwards.")
+    f.copyDropdown = copyDropdown
+    local copyLabel = Paint(f:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "headerLabel")
+    copyLabel:SetText("Copy from")
+    copyLabel:SetPoint("RIGHT", copyDropdown, "LEFT", -8, 1)
+    f.copyLabel = copyLabel
 
     
     local sidebar = CreateFrame("Frame", nil, f)
@@ -374,7 +470,7 @@ function Window:CreateWindow()
     f.sidebarScroll, f.sidebarList = sidebarScroll, sidebarList
 
     local sidebarRule = f:CreateTexture(nil, "ARTWORK")
-    sidebarRule:SetColorTexture(0.4, 0.4, 0.4, 0.4)
+    Paint(sidebarRule, "ruleSidebar", "fill")
     sidebarRule:SetWidth(1)
     sidebarRule:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 6, 0)
     sidebarRule:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMRIGHT", 6, 0)
@@ -385,9 +481,102 @@ function Window:CreateWindow()
     content:SetPoint("BOTTOMRIGHT", -14, 14)
     f.content = content
 
+    
+    
+    
+    
+    
+    
+    
+    
+    f:SetResizable(true)
+    if f.SetResizeBounds then
+        f:SetResizeBounds(WINDOW_WIDTH, WINDOW_HEIGHT, 4096, 4096)
+    end
+    f:SetScript("OnSizeChanged", function(self)
+        if ThugUI.Theme and ThugUI.Theme.ApplyChrome then ThugUI.Theme:ApplyChrome(self) end
+    end)
+    local grip = CreateFrame("Button", nil, f)
+    grip:SetSize(16, 16)
+    grip:SetPoint("BOTTOMRIGHT", -6, 6)
+    grip:SetFrameLevel(f:GetFrameLevel() + 20)
+    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    grip:SetScript("OnMouseDown", function() Window:StartResize() end)
+    grip:SetScript("OnMouseUp", function() Window:StopResize() end)
+    W.AttachTooltip(grip, "Resize", "Drag to change the window's width and height. It cannot get smaller than the size the pages are laid out for.")
+    f.resizeGrip = grip
+
     self.frame = f
+    self:ApplyWindowTheme()
     self:RebuildSidebar()
     return f
+end
+
+Window.MIN_SCALE, Window.MAX_SCALE = 0.75, 1.5
+Window.WINDOW_WIDTH, Window.WINDOW_HEIGHT = WINDOW_WIDTH, WINDOW_HEIGHT
+
+
+function Window:ApplyWindowTheme()
+    local f = self.frame
+    if not f or not ThugUI.Theme then return end
+    local s = ThugUI.Theme:Settings()
+    self:SetWindowSize(s.windowW, s.windowH, true)
+    self:SetWindowScale(tonumber(s.windowScale) or 1, true)
+    ThugUI.Theme:ApplySaved()
+    if f.resizeGrip then f.resizeGrip:SetShown(s.resizable == true) end
+end
+
+
+
+function Window:SetWindowScale(scale, keepSaved)
+    local f = self.frame
+    if not f then return end
+    scale = math.max(self.MIN_SCALE, math.min(self.MAX_SCALE, tonumber(scale) or 1))
+    local old = f:GetScale() or 1
+    local left, top = f:GetLeft(), f:GetTop()
+    f:SetScale(scale)
+    if type(left) == "number" and type(top) == "number" and old > 0 then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left * old / scale, top * old / scale)
+    end
+    if not keepSaved and ThugUI.Theme then ThugUI.Theme:Settings().windowScale = scale end
+end
+
+
+
+function Window:SetWindowSize(w, h, keepSaved)
+    local f = self.frame
+    if not f then return end
+    local maxW = math.max(WINDOW_WIDTH, (UIParent:GetWidth() or WINDOW_WIDTH) / (f:GetScale() or 1))
+    local maxH = math.max(WINDOW_HEIGHT, (UIParent:GetHeight() or WINDOW_HEIGHT) / (f:GetScale() or 1))
+    w = math.max(WINDOW_WIDTH, math.min(maxW, tonumber(w) or WINDOW_WIDTH))
+    h = math.max(WINDOW_HEIGHT, math.min(maxH, tonumber(h) or WINDOW_HEIGHT))
+    f:SetSize(w, h)
+    if not keepSaved and ThugUI.Theme then
+        local s = ThugUI.Theme:Settings()
+        s.windowW, s.windowH = w, h
+    end
+end
+
+function Window:StartResize()
+    local f = self.frame
+    if not f then return end
+    
+    local left, top = f:GetLeft(), f:GetTop()
+    if type(left) == "number" and type(top) == "number" then
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    end
+    f:StartSizing("BOTTOMRIGHT")
+end
+
+function Window:StopResize()
+    local f = self.frame
+    if not f then return end
+    f:StopMovingOrSizing()
+    self:SetWindowSize(f:GetWidth(), f:GetHeight())
 end
 
 function Window:RebuildSidebar()
@@ -412,18 +601,18 @@ function Window:RebuildSidebar()
             
             local bg = catBtn:CreateTexture(nil, "BACKGROUND")
             bg:SetAllPoints()
-            bg:SetColorTexture(1, 1, 1, 0.08)
+            Paint(bg, "selectedFill", "fill")
             bg:Hide()
             catBtn.selectedBG = bg
 
             local hl = catBtn:CreateTexture(nil, "HIGHLIGHT")
             hl:SetAllPoints()
-            hl:SetColorTexture(1, 1, 1, 0.10)
+            Paint(hl, "highlight", "fill")
 
             local glyphBtn = CreateFrame("Button", nil, catBtn)
             glyphBtn:SetSize(20, 26)
             glyphBtn:SetPoint("LEFT", 0, 0)
-            local glyph = glyphBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            local glyph = Paint(glyphBtn:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "navGlyph")
             glyph:SetPoint("LEFT", 4, 0)
             catBtn.glyph = glyph
             catBtn.toggle = glyphBtn  
@@ -433,7 +622,7 @@ function Window:RebuildSidebar()
                 Window:RebuildSidebar()
             end)
 
-            local label = catBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            local label = Paint(catBtn:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "navCategory")
             label:SetPoint("LEFT", 20, 0)
             label:SetJustifyH("LEFT")
             catBtn.label = label
@@ -466,22 +655,62 @@ function Window:RebuildSidebar()
         row = row + 1
 
         if not isCollapsed then
+            local function NavRow(def, x, width, nested)
+                local btn = f.navButtons[def.id]
+                if not btn then
+                    btn = CreateNavButton(f.sidebarList, def.title)
+                    btn:SetScript("OnClick", function()
+                        Window:SelectPage(def.id)
+                    end)
+                    f.navButtons[def.id] = btn
+                end
+                btn.label:SetText(def.title)
+                btn:SetWidth(width)
+                btn.nested = nested
+                btn:ClearAllPoints()
+                btn:SetPoint("TOPLEFT", f.sidebarList, "TOPLEFT", x, -(row * ROW_HEIGHT))
+                btn:SetSelected(def.id == self.activePageID)
+                btn:Show()
+                row = row + 1
+                return btn
+            end
             for _, def in ipairs(visible) do
-                do
-                    local btn = f.navButtons[def.id]
-                    if not btn then
-                        btn = CreateNavButton(f.sidebarList, def.title)
-                        btn:SetScript("OnClick", function()
-                            Window:SelectPage(def.id)
-                        end)
-                        f.navButtons[def.id] = btn
+                if not self:IsChildPage(def) then
+                    local btn = NavRow(def, 22, SIDEBAR_WIDTH - 20)
+                    
+                    
+                    
+                    
+                    local children = self:ChildPages(def.id)
+                    local key = "page:" .. def.id
+                    if #children > 0 then
+                        if not btn.toggle then
+                            local glyphBtn = CreateFrame("Button", nil, btn)
+                            glyphBtn:SetSize(16, 26)
+                            glyphBtn:SetPoint("LEFT", 2, 0)
+                            local glyph = Paint(glyphBtn:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "navGlyph")
+                            glyph:SetPoint("LEFT", 2, 0)
+                            glyphBtn.glyph = glyph
+                            glyphBtn:SetScript("OnClick", function()
+                                Window.collapsed[key] = not Window.collapsed[key]
+                                Window:RebuildSidebar()
+                            end)
+                            btn.toggle = glyphBtn
+                        end
+                        btn.toggle.glyph:SetText(Window.collapsed[key] and "+" or "-")
+                        btn.toggle:Show()
+                        btn.label:ClearAllPoints()
+                        btn.label:SetPoint("LEFT", 20, 0)
+                        if not Window.collapsed[key] then
+                            for _, child in ipairs(children) do
+                                NavRow(child, 34, SIDEBAR_WIDTH - 32, true)
+                            end
+                        end
+                    elseif btn.toggle then
+                        btn.toggle:Hide()
+                        btn.label:ClearAllPoints()
+                        btn.label:SetPoint("LEFT", 12, 0)
                     end
-                    btn.label:SetText(def.title)
-                    btn:ClearAllPoints()
-                    btn:SetPoint("TOPLEFT", f.sidebarList, "TOPLEFT", 22, -(row * ROW_HEIGHT))
-                    btn:SetSelected(def.id == self.activePageID)
-                    btn:Show()
-                    row = row + 1
                 end
             end
         end
@@ -536,53 +765,6 @@ end
 local TAB_HEIGHT = 22
 local TAB_GAP = 4
 
-local function CreateTabButton(parent, text)
-    local btn = CreateFrame("Button", nil, parent)
-    btn:SetHeight(TAB_HEIGHT)
-
-    local bg = btn:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(1, 1, 1, 0.05)
-
-    local sel = btn:CreateTexture(nil, "BORDER")
-    sel:SetAllPoints()
-    sel:SetColorTexture(1, 1, 1, 0.12)
-    sel:Hide()
-    btn.selectedBG = sel
-
-    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.08)
-
-    
-    local accent = btn:CreateTexture(nil, "ARTWORK")
-    accent:SetPoint("BOTTOMLEFT")
-    accent:SetPoint("BOTTOMRIGHT")
-    accent:SetHeight(2)
-    accent:SetColorTexture(0.0, 1.0, 0.8, 0.9)
-    accent:Hide()
-    btn.accent = accent
-
-    local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetPoint("CENTER")
-    label:SetText(text)
-    btn.label = label
-    btn.labelText = text
-    btn:SetWidth((label:GetStringWidth() or 60) + 24)
-
-    function btn:SetSelected(selected)
-        self.selectedBG:SetShown(selected)
-        self.accent:SetShown(selected)
-        if selected then
-            self.label:SetTextColor(1, 0.82, 0)
-        else
-            self.label:SetTextColor(0.75, 0.75, 0.75)
-        end
-    end
-    btn:SetSelected(false)
-    return btn
-end
-
 
 
 
@@ -591,10 +773,13 @@ function Window:SelectTab(def, index)
     if not tabs or not tabs[index] then return end
     for i, tab in ipairs(tabs) do
         tab.scroll:SetShown(i == index)
+        if tab.head then tab.head:SetShown(i == index) end
         tab.button:SetSelected(i == index)
     end
     def.activeTab = index
-    def.host = tabs[index].host
+    
+    
+    def.host = tabs[index].bodyHost or tabs[index].host
     def.scrollFrame = tabs[index].scroll
 end
 
@@ -634,8 +819,8 @@ function Window:BuildTabbedPage(def, container)
         local scroll, child = W.CreateScrollArea(container)
         child:SetWidth(childW)
         scroll:Hide()
-        local tab = { title = title, scroll = scroll, host = child, index = #tabs + 1 }
-        tab.button = CreateTabButton(tabBar, title)
+        local tab = { title = title, scroll = scroll, host = child, index = #tabs + 1, pageDef = def }
+        tab.button = W.CreateTabButton(tabBar, title)
         tab.button:SetScript("OnClick", function() Window:SelectTab(def, tab.index) end)
         tabs[#tabs + 1] = tab
 
@@ -662,6 +847,8 @@ function Window:BuildTabbedPage(def, container)
         def.scrollFrame = scroll
         return container
     end
+    
+    panel:FinalizeSubTabs()
     tabs[#tabs].height = panel:GetHeight()
 
     
@@ -693,7 +880,7 @@ function Window:BuildTabbedPage(def, container)
     top = top + barH
 
     local rule = container:CreateTexture(nil, "ARTWORK")
-    rule:SetColorTexture(0.4, 0.4, 0.4, 0.4)
+    Paint(rule, "ruleTabs", "fill")
     rule:SetHeight(1)
     rule:SetPoint("TOPLEFT", container, "TOPLEFT", 4, -top)
     rule:SetPoint("TOPRIGHT", container, "TOPRIGHT", -4, -top)
@@ -703,7 +890,48 @@ function Window:BuildTabbedPage(def, container)
         tab.scroll:ClearAllPoints()
         tab.scroll:SetPoint("TOPLEFT", container, "TOPLEFT", 4, -top)
         tab.scroll:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -28, 4)
-        tab.host:SetHeight(math.max(tab.height, fullH - top))
+        
+        
+        tab.minHeight = fullH - top
+        if tab.subTabs then
+            
+            
+            
+            
+            
+            local headH = tab.subBodyTop or 0
+            local head = CreateFrame("Frame", nil, container)
+            head:SetPoint("TOPLEFT", container, "TOPLEFT", 4, -top)
+            head:SetPoint("TOPRIGHT", container, "TOPRIGHT", -28, -top)
+            head:SetHeight(math.max(headH, 1))
+            if head.SetClipsChildren then head:SetClipsChildren(true) end
+            head:Hide()
+            local oldScroll = tab.scroll
+            oldScroll:SetScrollChild(CreateFrame("Frame", nil, oldScroll))
+            oldScroll:Hide()
+            tab.host:SetParent(head)
+            tab.host:ClearAllPoints()
+            tab.host:SetPoint("TOPLEFT", head, "TOPLEFT", 0, 0)
+            tab.host:SetHeight(math.max(headH, 1))
+
+            local bodyScroll, bodyHost = W.CreateScrollArea(container)
+            bodyScroll:ClearAllPoints()
+            bodyScroll:SetPoint("TOPLEFT", container, "TOPLEFT", 4, -(top + headH))
+            bodyScroll:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -28, 4)
+            bodyScroll:Hide()
+            bodyHost:SetWidth(childW)
+            for _, st in ipairs(tab.subTabs) do
+                st.host:SetParent(bodyHost)
+                st.host:ClearAllPoints()
+                st.host:SetPoint("TOPLEFT", bodyHost, "TOPLEFT", 0, 0)
+            end
+            tab.head, tab.headHost = head, tab.host
+            tab.scroll, tab.bodyHost = bodyScroll, bodyHost
+            tab.bodyMinHeight = fullH - top - headH
+            W.SelectSubTab(tab, tab.activeSubTab or 1)
+        else
+            tab.host:SetHeight(math.max(tab.height, fullH - top))
+        end
     end
 
     self:SelectTab(def, def.activeTab or 1)
@@ -773,6 +1001,9 @@ function Window:SelectPage(id)
     if def.category then
         self.collapsed[def.category] = false
     end
+    if def.parent then
+        self.collapsed["page:" .. def.parent] = false
+    end
     if id:match("^cat:") then
         local cid = id:sub(5)
         self.collapsed[cid] = false
@@ -804,15 +1035,15 @@ function Window:SelectPage(id)
     self:BuildPage(def)
     self.activePageID = id
 
-    if self.frame.scopeDropdown and self.frame.scopeLabel then
-        if def.scopeKeys then
-            self.frame.scopeDropdown:Show()
-            self.frame.scopeLabel:Show()
-            self.frame.scopeDropdown:Refresh()
-        else
-            self.frame.scopeDropdown:Hide()
-            self.frame.scopeLabel:Hide()
+    if self.frame.scopeButtons and self.frame.scopeLabel then
+        local scoped = def.scopeKeys and true or false
+        for _, b in ipairs(self.frame.scopeButtons) do b:SetShown(scoped) end
+        self.frame.scopeLabel:SetShown(scoped)
+        if self.frame.copyDropdown then
+            self.frame.copyDropdown:SetShown(scoped)
+            self.frame.copyLabel:SetShown(scoped)
         end
+        if scoped then self:RefreshScopeButtons() end
     end
 
     
@@ -911,11 +1142,17 @@ function Window:Search(text)
         return true
     end
 
+    
+    
+    
+    
+    local pageRow = {}
     for _, def in ipairs(self.pages) do
         if not (ThugUI.Modules and not ThugUI.Modules:PageOn(def.id)) then
             if #results >= RESULTS_CAP then break end
             local title = def.title or ""
             if MatchesAll(title:lower()) then
+                pageRow[def.id] = true
                 table.insert(results, {
                     pageID = def.id, pageTitle = title, section = nil,
                     text = title, frame = nil, kind = "page",
@@ -933,12 +1170,17 @@ function Window:Search(text)
                 for _, entry in ipairs((panel and panel.searchIndex) or {}) do
                     if #results >= RESULTS_CAP then break end
                     local haystack = ((def.title or "") .. " " .. (entry.section or "") .. " " .. entry.text):lower()
-                    if MatchesAll(haystack) then
+                    local existing = pageRow[def.id]
+                    if MatchesAll(haystack) and existing then
+                        if type(existing) == "table" then existing.more = existing.more + 1 end
+                    elseif MatchesAll(haystack) then
+                        pageRow[def.id] = {}
                         table.insert(results, {
                             pageID = def.id, pageTitle = def.title, section = entry.section,
                             text = entry.text, frame = entry.frame, kind = entry.kind,
-                            tab = entry.tab,
+                            tab = entry.tab, subTab = entry.subTab, more = 0,
                         })
+                        pageRow[def.id] = results[#results]
                     end
                 end
             end
@@ -962,7 +1204,7 @@ function Window:EnsureResultsView()
     container:Hide()
     self.resultsContainer = container
 
-    local header = container:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    local header = Paint(container:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormalLarge")), "pageTitle")
     header:SetPoint("TOPLEFT", 16, -14)
     self.resultsHeader = header
 
@@ -986,14 +1228,14 @@ function Window:GetResultRow(i)
 
     local hl = row:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.08)
+    Paint(hl, "highlight", "fill")
 
-    local label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    local label = Paint(row:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontHighlight")), "listItem")
     label:SetPoint("TOPLEFT", 4, -4)
     label:SetJustifyH("LEFT")
     row.label = label
 
-    local subtitle = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    local subtitle = Paint(row:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontDisableSmall")), "pageContext")
     subtitle:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -2)
     subtitle:SetJustifyH("LEFT")
     row.subtitle = subtitle
@@ -1021,11 +1263,15 @@ function Window:ShowResults(results)
             row.subtitle:SetText("")
         else
             row.label:SetText(result.text)
+            local where = result.pageTitle
             if result.section and result.section ~= "" then
-                row.subtitle:SetText(result.pageTitle .. " \226\128\186 " .. result.section)
-            else
-                row.subtitle:SetText(result.pageTitle)
+                where = where .. " \226\128\186 " .. result.section
             end
+            
+            if (result.more or 0) > 0 then
+                where = where .. (" (+%d more)"):format(result.more)
+            end
+            row.subtitle:SetText(where)
         end
         row:Show()
     end
@@ -1100,7 +1346,7 @@ function Window:OutlineFrame(target, hostFrame)
     if not self.searchOutline then
         local outline = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
         outline:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 })
-        outline:SetBackdropBorderColor(1, 0.82, 0, 1)
+        Paint(outline, "searchOutline", "border")
         outline:Hide()
         self.searchOutline = outline
     end
@@ -1144,6 +1390,12 @@ function Window:JumpTo(result)
     
     if def and result.tab and result.tab.index then
         self:SelectTab(def, result.tab.index)
+        if result.subTab and result.subTab.index then
+            local subTab = result.tab.subTabs and result.tab.subTabs[result.subTab.index]
+            if subTab and subTab.button then
+                subTab.button:GetScript("OnClick")(subTab.button)
+            end
+        end
     end
     if result.frame and def and def.scrollFrame then
         local hostTop = def.host and type(def.host.GetTop) == "function" and def.host:GetTop()
@@ -1166,29 +1418,36 @@ end
 
 
 
-
-
-StaticPopupDialogs["THUGUI_SCOPE_SHARED"] = {
-    text = "Go back to the shared settings for this page?",
-    button1 = "Use shared",
+ThugUI.Dialogs["THUGUI_SCOPE_COPY"] = {
+    text = "Copy this page's settings from %s into %s?\n\nWhat this page has there now is replaced. A reload applies it.",
+    button1 = "Copy",
     button2 = "Cancel",
-    button3 = "Make mine shared",
     OnAccept = function(self, data)
-        for _, key in ipairs(data) do ThugUI.Profiles:SetScope(key, "shared", "discard") end
-        if ThugUI.Window.frame and ThugUI.Window.frame.scopeDropdown then ThugUI.Window.frame.scopeDropdown:Refresh() end
-    end,
-    OnAlt = function(self, data)
-        for _, key in ipairs(data) do ThugUI.Profiles:SetScope(key, "shared", "promote") end
-        if ThugUI.Window.frame and ThugUI.Window.frame.scopeDropdown then ThugUI.Window.frame.scopeDropdown:Refresh() end
-    end,
-    OnCancel = function(self, data)
-        if ThugUI.Window.frame and ThugUI.Window.frame.scopeDropdown then ThugUI.Window.frame.scopeDropdown:Refresh() end
+        local P = ThugUI.Profiles
+        local copied = false
+        for _, key in ipairs(data.keys) do
+            if P:CopyFrom(key, data.id) then copied = true end
+        end
+        if copied then
+            P:PromptCopyReload(data.pageTitle, data.sourceText, P:ScopeOf(data.keys[1]))
+        end
     end,
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
     preferredIndex = 3,
 }
+
+
+
+function Window:RefreshScopeButtons()
+    local f = self.frame
+    if not (f and f.scopeButtons) then return end
+    local def = self.pagesByID[self.activePageID]
+    local active = def and def.scopeKeys and ThugUI.Profiles:ScopeOf(def.scopeKeys[1]) or "shared"
+    for _, b in ipairs(f.scopeButtons) do b:SetActive(b.scope == active) end
+    if f.scopeLabel and f.scopeLabel.Refresh then f.scopeLabel:Refresh() end
+end
 
 function ThugUI:ToggleOptions(pageID)
     Window:Toggle(pageID)

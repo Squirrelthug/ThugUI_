@@ -45,6 +45,18 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 ThugUI = ThugUI or {}
 
 local P = {}
@@ -140,23 +152,60 @@ end
 
 
 
-function P:LayerFor(scope)
+
+local function Layers(profile)
+    if type(profile.layers) ~= "table" then profile.layers = {} end
+    local l = profile.layers
+    if type(l.faction) ~= "table" then l.faction = {} end
+    if type(l.char) ~= "table" then l.char = {} end
+    return l
+end
+P.Layers = Layers
+
+
+
+function P:LayerFor(scope, name)
     if scope == "shared" or not scope then return nil end
-    local s = self:Store()
-    s.layers = s.layers or {}
-    s.layers.faction = s.layers.faction or {}
-    s.layers.char = s.layers.char or {}
-    
+    local profile = self:Store().profiles[name or self.active]
+    if type(profile) ~= "table" then return nil end
+    local l = Layers(profile)
     if scope == "faction" then
         if not self.factionAtLoad then return nil end
-        s.layers.faction[self.factionAtLoad] = s.layers.faction[self.factionAtLoad] or {}
-        return s.layers.faction[self.factionAtLoad]
+        l.faction[self.factionAtLoad] = l.faction[self.factionAtLoad] or {}
+        return l.faction[self.factionAtLoad]
     elseif scope == "character" then
         if not self.charKeyAtLoad then return nil end
-        s.layers.char[self.charKeyAtLoad] = s.layers.char[self.charKeyAtLoad] or {}
-        return s.layers.char[self.charKeyAtLoad]
+        l.char[self.charKeyAtLoad] = l.char[self.charKeyAtLoad] or {}
+        return l.char[self.charKeyAtLoad]
     end
     return nil
+end
+
+
+
+
+
+function P:MoveLegacyLayers()
+    local s = self:Store()
+    local old = s.layers
+    if type(old) ~= "table" then return false end
+    for _, profile in pairs(s.profiles) do
+        if type(profile) == "table" then
+            local l = Layers(profile)
+            for _, group in ipairs({ "faction", "char" }) do
+                for who, bucket in pairs(type(old[group]) == "table" and old[group] or {}) do
+                    if type(bucket) == "table" then
+                        l[group][who] = l[group][who] or {}
+                        for k, v in pairs(bucket) do
+                            if l[group][who][k] == nil then l[group][who][k] = DeepCopy(v) end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    s.layers = nil
+    return true
 end
 
 
@@ -187,10 +236,25 @@ function P:MigrateKeys()
                 if RenameKey(profile.db, old, new) then changed = true end
                 if RenameKey(profile.scopes, old, new) then changed = true end
             end
-            if type(profile.db) == "table" then
-                for parent, inner in pairs(RENAMED_INNER) do
-                    for old, new in pairs(inner) do
-                        if RenameKey(profile.db[parent], old, new) then changed = true end
+            local tables = { profile.db }
+            if type(profile.layers) == "table" then
+                for _, group in pairs(profile.layers) do
+                    for _, bucket in pairs(type(group) == "table" and group or {}) do
+                        if type(bucket) == "table" then
+                            tables[#tables + 1] = bucket
+                            for old, new in pairs(RENAMED_KEYS) do
+                                if RenameKey(bucket, old, new) then changed = true end
+                            end
+                        end
+                    end
+                end
+            end
+            for _, t in ipairs(tables) do
+                if type(t) == "table" then
+                    for parent, inner in pairs(RENAMED_INNER) do
+                        for old, new in pairs(inner) do
+                            if RenameKey(t[parent], old, new) then changed = true end
+                        end
                     end
                 end
             end
@@ -220,6 +284,14 @@ function P:Bootstrap()
     
     local d = s.profiles[self.DEFAULT]
     self.freshInstall = migrated and next(d.config) == nil and next(d.db) == nil
+    
+    
+    
+    if self.freshInstall and d.scopes.Orbs == nil then d.scopes.Orbs = "faction" end
+
+    
+    
+    self.layersMoved = self:MoveLegacyLayers()
 
     
     
@@ -250,6 +322,8 @@ function P:Bootstrap()
     local factionOK, faction = pcall(UnitFactionGroup, "player")
     if not factionOK or faction == "Neutral" then faction = nil end
     self.factionAtLoad = faction
+    
+    self.active = name
 
     local live = {}
     for k, v in pairs(db) do
@@ -267,8 +341,12 @@ function P:Bootstrap()
                 ThugUI.Diagnostics:Log("PROFILES", "scope %s for %s unresolved at load, using shared", tostring(scope), tostring(k))
             end
         else
+            
+            
+            
+            
             if bucket[k] == nil then
-                bucket[k] = DeepCopy(db[k] or {})
+                bucket[k] = {}
             end
             rawset(live, k, bucket[k])
             self.liveScopes[k] = scope
@@ -385,8 +463,10 @@ function P:SetScope(key, scope, mode)
     if scope == "faction" or scope == "character" then
         local bucket = self:LayerFor(scope)
         if not bucket then return false, "unresolved" end
+        
+        
         if bucket[key] == nil then
-            bucket[key] = DeepCopy(_G.ThugUIDB[key] or {})
+            bucket[key] = {}
         end
         p.scopes[key] = scope
     elseif scope == "shared" then
@@ -410,7 +490,86 @@ function P:SetScope(key, scope, mode)
         return false, "invalid scope"
     end
     
-    self:PromptReload(self.active)
+    
+    return true
+end
+
+
+
+
+
+
+
+
+
+local function HereID(self, key)
+    local here = self:ScopeOf(key)
+    if here == "faction" then return "faction:" .. tostring(self.factionAtLoad) end
+    if here == "character" then return "char:" .. tostring(self.charKeyAtLoad) end
+    return "shared"
+end
+
+local function SourceTable(self, key, id)
+    local s = self:Store()
+    if id == "shared" then
+        local p = s.profiles[self.active]
+        return p and p.db and p.db[key] or {}
+    end
+    local profile = s.profiles[self.active]
+    local layers = profile and Layers(profile) or {}
+    local f = id:match("^faction:(.+)$")
+    if f then return layers.faction and layers.faction[f] and layers.faction[f][key] end
+    local ck = id:match("^char:(.+)$")
+    if ck then return layers.char and layers.char[ck] and layers.char[ck][key] end
+    return nil
+end
+
+
+
+function P:CopySources(key)
+    local list = {}
+    if not self.active then return list end
+    local hereID = HereID(self, key)
+    local function Add(id, text)
+        if id ~= hereID then list[#list + 1] = { value = id, text = text } end
+    end
+    Add("shared", "Shared (all characters)")
+    local profile = self:Store().profiles[self.active]
+    local layers = profile and Layers(profile) or {}
+    for _, group in ipairs({ { "faction", "Faction: " }, { "char", "" } }) do
+        local names = {}
+        for name, bucket in pairs(layers[group[1] ] or {}) do
+            if type(bucket) == "table" and bucket[key] ~= nil then names[#names + 1] = name end
+        end
+        table.sort(names)
+        for _, name in ipairs(names) do Add(group[1] .. ":" .. name, group[2] .. name) end
+    end
+    return list
+end
+
+
+
+function P:CopyFrom(key, id)
+    if not self.active then return false, "unknown" end
+    if id == HereID(self, key) then return false, "same" end
+    local src = SourceTable(self, key, id)
+    if type(src) ~= "table" then return false, "empty" end
+    local here = self:ScopeOf(key)
+    local dest
+    if here == "shared" then
+        local p = self:Store().profiles[self.active]
+        p.db = p.db or {}
+        p.db[key] = p.db[key] or {}
+        dest = p.db[key]
+    else
+        local bucket = self:LayerFor(here)
+        if not bucket then return false, "unresolved" end
+        bucket[key] = bucket[key] or {}
+        dest = bucket[key]
+    end
+    local copy = DeepCopy(src)
+    wipe(dest)
+    for k, v in pairs(copy) do dest[k] = v end
     return true
 end
 
@@ -474,12 +633,14 @@ function P:Create(name, fromName)
             config = DeepCopy(src.config),
             db = DeepCopy(src.db),
             scopes = DeepCopy(src.scopes or {}),
+            layers = DeepCopy(src.layers or {}),
         }
     else
         s.profiles[name] = {
             config = {},
             db = {},
             scopes = {},
+            layers = {},
         }
     end
     return true
@@ -571,9 +732,13 @@ function P:CopyInto(targetName, sourceName)
     local copiedConfig = DeepCopy(source.config)
     local copiedDB = DeepCopy(source.db)
     local copiedScopes = DeepCopy(source.scopes or {})
+    local copiedLayers = DeepCopy(source.layers or {})
     for k, v in pairs(copiedConfig) do target.config[k] = v end
     for k, v in pairs(copiedDB) do target.db[k] = v end
     for k, v in pairs(copiedScopes) do target.scopes[k] = v end
+    target.layers = target.layers or {}
+    wipe(target.layers)
+    for k, v in pairs(copiedLayers) do target.layers[k] = v end
 
     if targetName == self.active then
         self:PromptReload(targetName)
@@ -592,6 +757,9 @@ function P:Reset(name)
 
     wipe(p.config)
     wipe(p.db)
+    
+    
+    if type(p.layers) == "table" then wipe(p.layers) end
 
     if name == self.active then
         self:PromptReload(name)
@@ -612,30 +780,49 @@ function P:Switch(name)
     return true
 end
 
+
+
+
+function P:SwitchAndReload(name)
+    if self:Store().profiles[name] == nil then return false, "unknown" end
+    Assign(self, name)
+    if InCombatLockdown and InCombatLockdown() then
+        self:PromptReload(name)
+    else
+        ReloadUI()
+    end
+    return true
+end
+
 local regenFrame
 
 
 
 
-function P:PromptReload(name)
+local function ShowReloadPopup(which, arg)
     if InCombatLockdown and InCombatLockdown() then
         if not regenFrame then
             regenFrame = CreateFrame("Frame")
         end
-        regenFrame.pendingProfile = name
+        regenFrame.pendingWhich, regenFrame.pendingProfile = which, arg
         regenFrame:SetScript("OnEvent", function(f, event)
             if event == "PLAYER_REGEN_ENABLED" then
                 f:UnregisterEvent("PLAYER_REGEN_ENABLED")
                 if f.pendingProfile then
-                    StaticPopup_Show("THUGUI_PROFILE_RELOAD", f.pendingProfile)
-                    f.pendingProfile = nil
+                    ThugUI.Dialog:Show(f.pendingWhich or "THUGUI_PROFILE_RELOAD", f.pendingProfile)
+                    f.pendingProfile, f.pendingWhich = nil, nil
                 end
             end
         end)
         regenFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     else
-        StaticPopup_Show("THUGUI_PROFILE_RELOAD", name)
+        ThugUI.Dialog:Show(which, arg)
     end
+end
+
+
+function P:PromptReload(name)
+    ShowReloadPopup("THUGUI_PROFILE_RELOAD", name)
 end
 
 
@@ -643,7 +830,51 @@ end
 
 
 
-StaticPopupDialogs["THUGUI_PROFILE_RELOAD"] = {
+
+
+
+
+function P:ScopeButtonName(scope)
+    
+    
+    if scope == "faction" then return "Faction" end
+    if scope == "character" then return "Character" end
+    return "Shared"
+end
+
+local GOLD = "|cffffd100%s|r"
+local function Gold(s) return GOLD:format(tostring(s)) end
+
+
+function P:PromptScopeReload(pageTitle, scope)
+    ShowReloadPopup("THUGUI_SCOPE_RELOAD", ("%s now uses its %s settings in profile %s. Reload the UI to apply it?")
+        :format(Gold(pageTitle or "This page"), Gold(self:ScopeButtonName(scope)), Gold(self.active or "?")))
+end
+
+
+function P:PromptCopyReload(pageTitle, sourceText, scope)
+    ShowReloadPopup("THUGUI_SCOPE_RELOAD", ("Copied %s into the %s settings of %s (profile %s). Reload the UI to apply it?")
+        :format(Gold(sourceText or "the settings"), Gold(self:ScopeButtonName(scope)),
+            Gold(pageTitle or "this page"), Gold(self.active or "?")))
+end
+
+
+
+
+
+
+ThugUI.Dialogs["THUGUI_SCOPE_RELOAD"] = {
+    text = "%s",
+    button1 = "Reload now",
+    button2 = "Later",
+    OnAccept = function() ReloadUI() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+ThugUI.Dialogs["THUGUI_PROFILE_RELOAD"] = {
     text = "ThugUI: this character now uses the profile |cffffd100%s|r. Reload the UI to apply it?",
     button1 = "Reload now",
     button2 = "Later",
@@ -653,5 +884,186 @@ StaticPopupDialogs["THUGUI_PROFILE_RELOAD"] = {
     hideOnEscape = true,
     preferredIndex = 3,
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+P.SHARE_TAG = "THUG"
+
+P.CLIENT_LETTER = { retail = "R", forever = "F" }
+local LETTER_CLIENT = { R = "retail", F = "forever" }
+
+function P.ShareTag()
+    return P.SHARE_TAG .. P.Major() .. (P.CLIENT_LETTER[ThugUI.client] or "R")
+end
+
+function P.Major()
+    return tonumber(tostring(ThugUI.version or "2"):match("^(%d+)")) or 2
+end
+
+local function Encoding()
+    local E = _G.C_EncodingUtil
+    if not (E and E.SerializeCBOR and E.DeserializeCBOR and E.CompressString
+        and E.DecompressString and E.EncodeBase64 and E.DecodeBase64) then
+        return nil
+    end
+    return E
+end
+
+
+
+local function PlainCopy(v, seen)
+    local t = type(v)
+    if t == "string" or t == "number" or t == "boolean" then return v end
+    if t ~= "table" then return nil end
+    seen = seen or {}
+    if seen[v] then return nil end
+    seen[v] = true
+    local out = {}
+    for k, vv in pairs(v) do
+        local kt = type(k)
+        if kt == "string" or kt == "number" then
+            local c = PlainCopy(vv, seen)
+            if c ~= nil then out[k] = c end
+        end
+    end
+    seen[v] = nil
+    return out
+end
+P.PlainCopy = PlainCopy
+
+
+function P:Export()
+    local E = Encoding()
+    if not E then return nil, "unsupported" end
+    local s = self:Store().profiles[self.active]
+    local db = {}
+    for k, v in pairs(_G.ThugUIDB or {}) do
+        if type(k) == "string" then db[k] = PlainCopy(v) end
+    end
+    local payload = {
+        app = "ThugUI",
+        major = P.Major(),
+        version = tostring(ThugUI.version or ""),
+        
+        
+        
+        
+        client = ThugUI.client,
+        name = self.active,
+        config = PlainCopy(_G.ThugUI_Config or {}),
+        db = db,
+        
+        
+        
+        scopes = PlainCopy((s and s.scopes) or {}),
+    }
+    local ok, out = pcall(function()
+        return E.EncodeBase64(E.CompressString(E.SerializeCBOR(payload)))
+    end)
+    if not ok or type(out) ~= "string" then return nil, "encode" end
+    return P.ShareTag() .. ":" .. out
+end
+
+
+
+function P:DecodeShare(text)
+    if type(text) ~= "string" then return nil, "empty" end
+    text = text:gsub("%s", "")
+    if text == "" then return nil, "empty" end
+    local major, letter, body = text:match("^" .. P.SHARE_TAG .. "(%d+)([RF]):(.+)$")
+    if not major then return nil, "notours" end
+    major = tonumber(major)
+    if major ~= P.Major() then return nil, "major", major end
+    
+    if LETTER_CLIENT[letter] ~= ThugUI.client then return nil, "client", LETTER_CLIENT[letter] end
+    local E = Encoding()
+    if not E then return nil, "unsupported" end
+    local ok, payload = pcall(function()
+        return E.DeserializeCBOR(E.DecompressString(E.DecodeBase64(body)))
+    end)
+    if not ok or type(payload) ~= "table" then return nil, "corrupt" end
+    if payload.app ~= "ThugUI" or type(payload.config) ~= "table" or type(payload.db) ~= "table" then
+        return nil, "corrupt"
+    end
+    if payload.client ~= ThugUI.client then return nil, "client", payload.client end
+    return payload
+end
+
+
+
+function P:Import(text, name)
+    local payload, reason, major = self:DecodeShare(text)
+    if not payload then return nil, reason, major end
+    local s = self:Store()
+    local base = (type(name) == "string" and not name:match("^%s*$")) and name
+        or ((type(payload.name) == "string" and payload.name ~= "" and payload.name or "Shared") .. " (imported)")
+    local final, n = base, 2
+    while s.profiles[final] ~= nil do
+        final = base .. " " .. n
+        n = n + 1
+    end
+    local profile = { config = PlainCopy(payload.config), db = PlainCopy(payload.db), scopes = {}, layers = {} }
+    
+    
+    if type(payload.scopes) == "table" then
+        for k, scope in pairs(payload.scopes) do
+            if type(k) == "string" and (scope == "faction" or scope == "character") then
+                profile.scopes[k] = scope
+            end
+        end
+    end
+    s.profiles[final] = profile
+    for k, scope in pairs(profile.scopes) do
+        local bucket = self:LayerFor(scope, final)
+        if bucket and type(profile.db[k]) == "table" then bucket[k] = DeepCopy(profile.db[k]) end
+    end
+    return final
+end
+
+P.SHARE_REASONS = {
+    empty = "Paste a ThugUI profile string first.",
+    notours = "That is not a ThugUI profile string (they start with THUG, a number and R or F, like THUG2R:).",
+    unsupported = "This game client cannot read profile strings (C_EncodingUtil is missing).",
+    corrupt = "The string is damaged or incomplete. Copy it again in full.",
+    encode = "The profile could not be turned into a string.",
+}
+local CLIENT_NAME = { retail = "retail (the main game)", forever = "WoW Forever" }
+P.CLIENT_NAME = CLIENT_NAME
+
+function P:ShareReasonText(reason, major)
+    if reason == "client" then
+        return ("That string was made on %s, and this is %s. Profiles only move between the same game.")
+            :format(CLIENT_NAME[major] or "another game", CLIENT_NAME[ThugUI.client] or tostring(ThugUI.client))
+    end
+    if reason == "major" then
+        return ("That string was made with ThugUI %d.x and this is ThugUI %d.x. Settings move between "
+            .. "versions with the same first number only."):format(major or 0, P.Major())
+    end
+    return P.SHARE_REASONS[reason] or tostring(reason)
+end
 
 return P

@@ -29,19 +29,28 @@ end
 
 
 
+
 Page.COMMANDS = {
     { "/thugui", "Open this window; /thugui <page id> opens that page. Also /thug and /tui." },
     { "/acorn", "Acorns: lock, unlock, chat normal|stream|hide, obj, objcombat, font <size>, icon <chat|obj> <icon>, reset. Also /acorns." },
     { "/thugwheel", "Open or close the controller wheel." },
     { "/thugchat", "Open or close the controller chat window." },
     { "/thugport", "Cast your hearthstone through the wheel's travel button." },
-    { "/thugprep dump", "Log how every bag consumable was sorted for Prep, and count each section." },
     { "/thugfish", "Create or update the ThugFish macro and put it on your cursor." },
-    { "/thugcv", "Cooldown grids: legacy (swap to the old ECV/BCV/GCV bars and back), import [force], probe, rebuild, status." },
-    { "/thugdebug", "Turn verbose debug logging on or off." },
+    { "/thugcv", "Cooldown grids: legacy (swap to the old ECV/BCV/GCV bars and back), import [force], rebuild, status." },
+    { "/thugseason", "Open or close the Season of Thuggery window." },
+}
+
+
+
+
+Page.DEV_COMMANDS = {
+    { "/thugprep dump", "Log how every bag consumable was sorted for Prep." },
+    { "/thugcv probe", "Probe cooldown entries into ThugUI_BCVDump." },
+    { "/thugdebug", "Verbose debug logging on or off." },
     { "/thuglog", "Print the debug log." },
-    { "/thugbcv", "Capture your buffs and probe Balance spells into ThugUI_BCVDump." },
-    { "/thugspell <name or id>", "Probe one spell's ID and texture into ThugUI_BCVDump." },
+    { "/thugbcv", "Capture buffs and probe Balance spells into ThugUI_BCVDump." },
+    { "/thugspell", "Probe one spell's ID and texture into ThugUI_BCVDump." },
 }
 
 Page.CREDITS = "Developed by Squirrelthug.\n"
@@ -52,14 +61,14 @@ Page.LINKS = {
     { text = "Spotify", icon = "Interface\\AddOns\\ThugUI\\media\\social\\spotify.tga", url = "https://open.spotify.com/show/7DeyxVjwhWHW4K7UyLCiZT" },
     { text = "Apple Podcasts", icon = "Interface\\AddOns\\ThugUI\\media\\social\\apple.tga", url = "https://podcasts.apple.com/us/podcast/last-attempt-a-world-of-warcraft-guildcast/id1876268344" },
     { text = "YouTube", icon = "Interface\\AddOns\\ThugUI\\media\\social\\youtube.tga", url = "https://www.youtube.com/@LastAttemptPod" },
-    { text = "Discord", icon = "Interface\\AddOns\\ThugUI\\media\\social\\discord.tga", url = "https://discord.gg/7hrBH5G7Hf" },
+    { text = "Discord", icon = "Interface\\AddOns\\ThugUI\\media\\social\\discord.tga", url = "https://discord.gg/fcw4UMmrw" },
     { text = "Twitch", icon = "Interface\\AddOns\\ThugUI\\media\\social\\twitch.tga", url = "https://www.twitch.tv/squirrelthug_" },
     { text = "Instagram", icon = "Interface\\AddOns\\ThugUI\\media\\social\\instagram.tga", url = "https://www.instagram.com/lastattemptpod/" },
     { text = "X", icon = "Interface\\AddOns\\ThugUI\\media\\social\\x.tga", url = "https://x.com/LastAttemptPod" },
     { text = "TikTok", icon = "Interface\\AddOns\\ThugUI\\media\\social\\tiktok.tga", url = "https://www.tiktok.com/@lastattemptpod" },
 }
 
-StaticPopupDialogs["THUGUI_COPY_LINK"] = {
+ThugUI.Dialogs["THUGUI_COPY_LINK"] = {
     text = "Copy the link (Ctrl+C), then paste it in your browser.",
     button1 = "Close",
     hasEditBox = true,
@@ -153,7 +162,7 @@ function Page:Build(host, panel)
 
         local urlCopy = link.url
         btn:SetScript("OnClick", function()
-            StaticPopup_Show("THUGUI_COPY_LINK", nil, nil, urlCopy)
+            ThugUI.Dialog:Show("THUGUI_COPY_LINK", nil, nil, urlCopy)
         end)
 
         panel:Place(rowFrame, 32)

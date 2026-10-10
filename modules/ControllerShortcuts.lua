@@ -66,7 +66,22 @@ function CS:Disable(bar)
     end
 end
 
+
+
+
+
+
+
+
+CS.PAUSED = true
+
 function CS:Install()
+    if CS.PAUSED then
+        if ThugUI.Diagnostics then
+            ThugUI.Diagnostics:LogOnce("shortcuts-paused", "SHORTCUTS", "map shortcut paused (opening the map from addon code breaks gamepad control)")
+        end
+        return false
+    end
     local bar = ThugUI.ControllerMode and ThugUI.ControllerMode:GetShortcutsBar()
     if not bar then
         if not CS.missingLogged then
@@ -78,18 +93,28 @@ function CS:Install()
         return false
     end
 
-    if _G.GamepadShortcutsActionBarMixin and rawget(_G.GamepadShortcutsActionBarMixin, "SetUpFaceBottom") ~= nil then
-        if ThugUI.Diagnostics then
-            ThugUI.Diagnostics:Log("SHORTCUTS", "Blizzard now uses the bottom face button; map shortcut not installed")
-        end
-        return false
-    end
-
     if CS.installed then return true end
     CS.installed = true
 
     
-    hooksecurefunc(bar, "SetUpFaceBottom", function(b) CS:Apply(b) end)
+    
+    
+    
+    
+    
+    
+    
+    hooksecurefunc(bar, "SetUpFaceBottom", function(b)
+        local btn = b and b.faceBottomButton
+        if btn and btn.IsEnabled and btn:IsEnabled() then
+            if ThugUI.Diagnostics then
+                ThugUI.Diagnostics:LogOnce("shortcuts-blizzard-uses", "SHORTCUTS",
+                    "Blizzard's own pass enabled the bottom face button; map shortcut left off")
+            end
+            return
+        end
+        CS:Apply(b)
+    end)
 
     
     for _, side in ipairs({ bar.Left, bar.Right }) do

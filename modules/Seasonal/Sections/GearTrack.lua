@@ -337,19 +337,6 @@ end
 
 
 
-local function GlobalFormat(name, ...)
-    local fmt = _G[name]
-    if type(fmt) ~= "string" then return nil end
-    local ok, text = pcall(string.format, fmt, ...)
-    if ok then return text end
-    return nil
-end
-
-
-
-
-
-
 
 
 
@@ -788,11 +775,6 @@ function GearTrack:PaintGearIconsForCharacter(cells, key, isCurrent)
     end
 end
 
-function GearTrack:PaintGearIcons(key, isCurrent)
-    if self.cells then
-        self:PaintGearIconsForCharacter(self.cells, key, isCurrent)
-    end
-end
 
 
 
