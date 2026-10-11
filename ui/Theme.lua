@@ -106,6 +106,10 @@ local DEFAULTS = {
     tilePending     = { 1, 0.82, 0, 1 },
     tileSuspended   = { 0.30, 0.60, 1.00, 1 },
     
+    
+    modalDim        = { 0, 0, 0, 0.55 },
+    copyGroup       = { 0.56, 0.83, 0.81, 1 },
+    
     gridFrame       = { 0, 0, 0, 0.55 },
     gridCellBorder  = { 0.35, 0.35, 0.4, 0.5 },
     gridCellFill    = { 0.08, 0.08, 0.10, 0.9 },

@@ -817,6 +817,16 @@ function MP:PlaceHolder()
     end
 end
 
+
+
+MP.CORNER_GAP, MP.CORNER_TOP = 20, 36
+
+
+
+function MP.TopLeftPoint(w, h, scale, uiHeight)
+    return { x = MP.CORNER_GAP + w * scale / 2, y = uiHeight - MP.CORNER_TOP - h * scale / 2 }
+end
+
 function MP:SaveHolderPoint()
     local x, y = self.holder:GetCenter()
     if not x then return end
@@ -885,10 +895,14 @@ function MP:TakeOver()
     
     
     
+    
+    
     local mx, my = Minimap:GetCenter()
     if type(Cfg().point) ~= "table" or type(Cfg().point.x) ~= "number" then
         Cfg().point = nil
-        if mx and my then
+        if GetMinimapMode() == "mouse" then
+            Cfg().point = MP.TopLeftPoint(Minimap:GetWidth(), Minimap:GetHeight(), Cfg().scale or 1, UIParent:GetHeight())
+        elseif mx and my then
             local k = (Minimap:GetEffectiveScale() or 1) / (UIParent:GetEffectiveScale() or 1)
             Cfg().point = { x = mx * k, y = my * k }
         end

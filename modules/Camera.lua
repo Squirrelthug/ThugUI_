@@ -274,6 +274,12 @@ end)
 
 local pollTimer = 0
 Camera:SetScript("OnUpdate", function(self, elapsed)
+    
+    
+    
+    
+    
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("camera") then self:SetScript("OnUpdate", nil) return end
     local cfg = ThugUIDB.Camera
     if not cfg or not cfg.enabled then return end
     

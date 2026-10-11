@@ -15,7 +15,7 @@ do
     local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
     local ok, v = false, nil
     if get then ok, v = pcall(get, "ThugUI", "Version") end
-    ThugUI.version = (ok and type(v) == "string" and v ~= "") and v or "2.1.1"
+    ThugUI.version = (ok and type(v) == "string" and v ~= "") and v or "2.2.0"
 end
 
 
@@ -148,53 +148,53 @@ ThugUI.defaults = {
         enabled = true,
         bars = {
             MainActionBar = {
-                managed = false,
+                managed = true,     
                 vertical = false,
                 perLine = 12,
                 numButtons = 12,     
                 hideHotkey = false,  
                 hideMacroName = false,
                 hideCount = false,   
-                buttonSize = 45,
+                buttonSize = 42,
                 spacing = 2,
                 reverse = false,
                 lockPage = false,
             },
             MultiBarBottomLeft = {
-                managed = false,
+                managed = true,     
                 vertical = false,
                 perLine = 12,
                 numButtons = 12,     
                 hideHotkey = false,  
                 hideMacroName = false,
                 hideCount = false,   
-                buttonSize = 45,
+                buttonSize = 42,
                 spacing = 2,
                 reverse = false,
                 lockPage = false,
             },
             MultiBarBottomRight = {
-                managed = false,
+                managed = true,     
                 vertical = false,
                 perLine = 12,
                 numButtons = 12,     
                 hideHotkey = false,  
                 hideMacroName = false,
                 hideCount = false,   
-                buttonSize = 45,
+                buttonSize = 42,
                 spacing = 2,
                 reverse = false,
                 lockPage = false,
             },
             MultiBarRight = {
-                managed = false,
+                managed = true,     
                 vertical = false,
                 perLine = 12,
                 numButtons = 12,     
                 hideHotkey = false,  
                 hideMacroName = false,
                 hideCount = false,   
-                buttonSize = 45,
+                buttonSize = 42,
                 spacing = 2,
                 reverse = false,
                 lockPage = false,
@@ -362,9 +362,17 @@ end
 
 
 function ThugUI:InitializeDB()
+    
+    
+    
+    local fresh = self.Profiles and self.Profiles.padFresh or {}
+    local pad = self.defaultsPad or {}
     for moduleName, moduleDefaults in pairs(self.defaults) do
         if not ThugUIDB[moduleName] then
             ThugUIDB[moduleName] = {}
+        end
+        if fresh[moduleName] and type(pad[moduleName]) == "table" then
+            DeepMergeDefaults(ThugUIDB[moduleName], pad[moduleName])
         end
         DeepMergeDefaults(ThugUIDB[moduleName], moduleDefaults)
     end

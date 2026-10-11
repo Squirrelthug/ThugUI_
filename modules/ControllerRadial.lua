@@ -723,6 +723,10 @@ local function UnitEntry(row)
     e.disabledMsg = row.reason
     if row.sub then
         e.stayOpen = true
+        
+        
+        
+        e.navigate = true
         e.action = function() ControllerRadial:EnterUnitSub(row) end
     elseif row.confirm then
         e.action = function() ThugUI.Dialog:Show(row.confirm) end
@@ -737,13 +741,18 @@ local function UnitPages(rows, header)
     local pages, page = {}, nil
     for _, row in ipairs(rows) do
         if not row.title then
-            if not page or #page.buttons == SEGMENTS then
+            
+            
+            local pair = row.key == "raidtarget" and row.sub and page and #page.buttons == SEGMENTS - 1
+            if not page or #page.buttons == SEGMENTS or pair then
                 local n = #pages + 1
                 page = { header = n == 1 and header or (header .. " " .. n), buttons = {},
                     hint = function() return ("Point, then press %s"):format(ButtonGlyph(PAD_CONFIRM)) end }
                 pages[n] = page
             end
             page.buttons[#page.buttons + 1] = UnitEntry(row)
+            
+            
             
             
             
@@ -756,7 +765,6 @@ local function UnitPages(rows, header)
                 for k, v in pairs(none) do rm[k] = v end
                 rm.key, rm.text, rm.checked = "removemark", "Remove mark", nil
                 rm.icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
-                if none.checked then rm.enabled, rm.reason = false, "No mark to remove." end
                 if #page.buttons == SEGMENTS then
                     local n = #pages + 1
                     page = { header = header .. " " .. n, buttons = {},
@@ -856,7 +864,17 @@ end
 function ControllerRadial:EnterUnitSub(row)
     self.unitPages = self.pages
     self.unitPageIndex = self.pageIndex
-    self.pages = UnitPages(row.sub, row.text)
+    local rows = row.sub
+    
+    
+    
+    if row.key == "raidtarget" then
+        rows = {}
+        for _, r in ipairs(row.sub) do
+            if r.key ~= "mark0" then rows[#rows + 1] = r end
+        end
+    end
+    self.pages = UnitPages(rows, row.text)
     self.pageIndex = 1
     self.sub = "unit_sub"
     self.selected = nil
@@ -891,7 +909,8 @@ function ControllerRadial:RebuildSubPages()
         clear.buttons[1] = {
             label = _G.RAID_TARGET_NONE or "None",
             icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
-            isEnabled = Safe(function() return TargetThere() and (PlainMark() or 0) ~= 0 end),
+            
+            isEnabled = Safe(TargetThere),
             action = MarkerFallback,
             travelEntry = { kind = "macro", text = Mark(0), name = "Clear mark" },
         }
@@ -1426,7 +1445,7 @@ function ControllerRadial:Stick(x, y)
             
             
             
-            local aimOnly = IsCastSub(self.sub)
+            local aimOnly = IsCastSub(self.sub) and not (entry and entry.navigate)
             if not aimOnly then
                 self:Pick(self.selected)
                 

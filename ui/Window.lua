@@ -422,30 +422,17 @@ function Window:CreateWindow()
     
     
     
-    local copyDropdown = W.CreateDropdown(f, 130, function()
+    local copyButton = W.CreateStateButton(f, "Copy from...")
+    copyButton:SetActive(true)
+    copyButton:SetScript("OnClick", function()
         local def = Window.pagesByID[Window.activePageID]
-        if not (def and def.scopeKeys) then return {} end
-        return ThugUI.Profiles:CopySources(def.scopeKeys[1])
-    end, function() return nil end, function(val)
-        local def = Window.pagesByID[Window.activePageID]
-        if not (def and def.scopeKeys) then return end
-        local text = val
-        for _, row in ipairs(ThugUI.Profiles:CopySources(def.scopeKeys[1])) do
-            if row.value == val then text = row.text end
-        end
-        local here = "the " .. ThugUI.Profiles:ScopeButtonName(ThugUI.Profiles:ScopeOf(def.scopeKeys[1])) .. " settings"
-        ThugUI.Dialog:Show("THUGUI_SCOPE_COPY", text, here,
-            { keys = def.scopeKeys, id = val, pageTitle = def.title, sourceText = text })
+        if def and def.scopeKeys and ThugUI.CopyWindow then ThugUI.CopyWindow:Open(def) end
     end)
-    function copyDropdown:Refresh() self.text:SetText("Choose a layer") end
-    copyDropdown:Refresh()
-    copyDropdown:SetPoint("RIGHT", scopeLabel, "LEFT", -16, -1)
-    W.AttachTooltip(copyDropdown, "Copy from", "Replace this page's settings in the scope you are on with a copy of another layer's: Shared, a faction, or a character with its own copy. Asks first. Nothing stays linked afterwards.")
-    f.copyDropdown = copyDropdown
-    local copyLabel = Paint(f:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontNormal")), "headerLabel")
-    copyLabel:SetText("Copy from")
-    copyLabel:SetPoint("RIGHT", copyDropdown, "LEFT", -8, 1)
-    f.copyLabel = copyLabel
+    copyButton:SetPoint("RIGHT", scopeLabel, "LEFT", -16, 0)
+    W.AttachTooltip(copyButton, "Copy from", "Start this page's settings from another setup: your mouse and keyboard or controller copy, a faction, a character or Shared. Opens a window that shows where it comes from and where it goes. Nothing stays linked afterwards.")
+    f.copyButton = copyButton
+    
+    f.copyDropdown = copyButton
 
     
     local sidebar = CreateFrame("Frame", nil, f)
@@ -1041,7 +1028,6 @@ function Window:SelectPage(id)
         self.frame.scopeLabel:SetShown(scoped)
         if self.frame.copyDropdown then
             self.frame.copyDropdown:SetShown(scoped)
-            self.frame.copyLabel:SetShown(scoped)
         end
         if scoped then self:RefreshScopeButtons() end
     end

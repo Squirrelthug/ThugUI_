@@ -22,7 +22,7 @@ SIZE = 512
 SUPER = 4
 CENTER = SIZE / 2.0
 OUTER = SIZE / 2.0 - 1.0          # one pixel clear of the edge, so nothing clips
-THICKNESSES = (6, 10, 14, 18, 24)  # must match PartyFrames.RING_THICKNESSES
+THICKNESSES = (1, 2, 3, 4, 6, 10, 14, 18, 24)  # must match PartyFrames.RING_THICKNESSES
 
 
 def coverage(px, py, inner, outer):

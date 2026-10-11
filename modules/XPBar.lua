@@ -218,7 +218,7 @@ local function ApplyBlizzardAlpha()
     local vAlpha = 1
     local vDefault = true
     if ThugUI.Visibility then
-        vAlpha = ThugUI.Visibility:Alpha("blizzXP")
+        vAlpha = ThugUI.Visibility:CurrentAlpha("blizzXP")
         vDefault = ThugUI.Visibility:IsDefault("blizzXP")
     end
     

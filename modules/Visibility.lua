@@ -107,7 +107,11 @@ local KEYS = {
     party = true,         
     
     
+    
     controllerStream = true, acornStream = true,
+    
+    
+    objectives = true,
 }
 
 local callbacks = {}
@@ -290,8 +294,18 @@ end
 
 
 
+
+
+local function PadOn(s)
+    return s.padReveal == true and ThugUI.controllerAtLoad == true
+end
+V.PadOn = PadOn
+
+
+
+
 local function PadRevealAlpha(self, s, target)
-    if not s.padReveal or Override(self, s) ~= nil then return target end
+    if not PadOn(s) or Override(self, s) ~= nil then return target end
     if isMoving then return target end
     local since = GetTime() - lastPadInput
     local hold = Clamp(s.padHold, 0, 10, 1.5)
@@ -306,14 +320,14 @@ end
 
 
 local function PadRevealBusy(s)
-    if not s.padReveal or isMoving then return false end
+    if not PadOn(s) or isMoving then return false end
     local since = GetTime() - lastPadInput
     return since < Clamp(s.padHold, 0, 10, 1.5) + Clamp(s.padFadeTime, 0, MAX_FADE_TIME, 3)
 end
 
 function V:CurrentAlpha(key)
     local s = Read(key)
-    if s.padReveal then return PadRevealAlpha(self, s, self:Alpha(key)) end
+    if PadOn(s) then return PadRevealAlpha(self, s, self:Alpha(key)) end
     local target = self:Alpha(key)
     if not (MovingFadeApplies(s) and Override(self, s) == nil) then return target end
     local p = FadeProgress(s)
@@ -336,7 +350,7 @@ end
 function V:IsDefault(key)
     local s = Read(key)
     return s.mode == "always" and not s.hideResting and s.oocAlpha == 1 and not s.showSoft
-        and not s.showTarget and not s.fadeMoving and not s.padReveal and not s.fadeFlying
+        and not s.showTarget and not s.fadeMoving and not PadOn(s) and not s.fadeFlying
 end
 
 function V:InCombat()
@@ -390,7 +404,7 @@ local function FadeTick(_, elapsed)
     
     for key in pairs(callbacks) do
         local t = ThugUIDB.Visibility and ThugUIDB.Visibility[key]
-        if t and t.padReveal then
+        if t and PadOn(t) then
             local s = Read(key)
             local wasBusy = PadRevealBusy(s)
             Fire(key)
@@ -472,7 +486,7 @@ function V:PadActivity()
     local any = false
     for key in pairs(callbacks) do
         local t = ThugUIDB.Visibility and ThugUIDB.Visibility[key]
-        if t and t.padReveal then Fire(key); any = true end
+        if t and PadOn(t) then Fire(key); any = true end
     end
     if any then
         fadeElapsed = 0
@@ -611,8 +625,18 @@ function V:AddControls(panel, key, opts)
         }
     end
     V:AddFlyingControls(panel, key, opts)
-    if opts.moving then V:AddMovingControls(panel, key, opts) end
-    if opts.padReveal then V:AddPadRevealControls(panel, key, opts) end
+    
+    
+    
+    
+    
+    
+    
+    
+    if opts.moving ~= false and not opts.noOpacity then V:AddMovingControls(panel, key, opts) end
+    if opts.padReveal ~= false and not opts.noOpacity and ThugUI.controllerAtLoad == true then
+        V:AddPadRevealControls(panel, key, opts)
+    end
 end
 
 

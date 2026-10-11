@@ -47,19 +47,35 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 local ThugUI = _G.ThugUI
 local PF = {}
 ThugUI.PartyFrames = PF
 ThugUI:RegisterModule("PartyFrames", PF)
 
-PF.RING_THICKNESSES = { 6, 10, 14, 18, 24 }   
+
+
+
+PF.RING_THICKNESSES = { 1, 2, 3, 4, 6, 10, 14, 18, 24 }   
 local MEDIA = "Interface\\AddOns\\ThugUI\\media\\party\\"
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 local SLOTS = 5
 
 ThugUI.defaults.PartyFrames = {
     unlocked = false, point = nil,
-    shape = "bars",            
+    shape = "circle",          
     growth = "down",           
     
     
@@ -75,9 +91,15 @@ ThugUI.defaults.PartyFrames = {
     
     
     
+    
     bgSource = "health", bgColor = "auto",
     ring1Source = "power", ring1Color = "auto",          
+    
+    
     ring2On = false, ring2Source = "heals", ring2Color = "auto", ring2Edge = 3, ring2Ring = 6, ring2Gap = 2,
+    
+    
+    prediction = false,
     
     showName = true, healthText = "none", textScale = 1, classColor = true,
     dim = false, dimAmount = 0.3,
@@ -113,7 +135,7 @@ local LOOK_KEYS = {}
 for _, k in ipairs({ "shape", "size", "width", "healthHeight", "powerHeight", "showHealth", "showPower",
     "classColor", "showResource", "edge", "ring", "gap", "icon", "iconScale", "iconX", "iconY", "iconRound",
     "bgSource", "bgColor", "bgRGB", "ring1Source", "ring1Color", "ring1RGB",
-    "ring2On", "ring2Source", "ring2Color", "ring2RGB", "ring2Edge", "ring2Ring", "ring2Gap" }) do
+    "ring2On", "ring2Source", "ring2Color", "ring2RGB", "ring2Edge", "ring2Ring", "ring2Gap", "prediction" }) do
     LOOK_KEYS[k] = true
 end
 PF.LOOK_KEYS = LOOK_KEYS
@@ -175,6 +197,15 @@ local function SafeSecret(v)
     if issecretvalue and issecretvalue(v) then return nil end
     return v
 end
+
+
+
+
+local function SourceOf(v)
+    if v == "heals" then return "health" end
+    return v
+end
+PF.SourceOf = SourceOf
 
 function PF:IsActive()
     if not ThugUI:IsModuleOn("partyframes") then return false end
@@ -388,6 +419,86 @@ local function Edges(parent)
     return E
 end
 
+
+
+
+local SHIELD = { 1, 1, 1, 0.5 }
+local HEAL = { 0.55, 1, 0.6, 0.4 }
+
+
+local PRED_LEVELS = 4
+
+
+
+
+
+
+local function MakePrediction(parent, host, vertical, disc)
+    local P = { host = host, vertical = vertical, disc = disc }
+    local base = host:GetFrameLevel()
+    local function Clip(level)
+        local clip = CreateFrame("Frame", nil, parent)
+        clip:SetClipsChildren(true)
+        clip:SetFrameLevel(level)
+        return clip
+    end
+    local function Overlay(clip, colour, level)
+        local bar = StatusBar(clip)
+        if vertical then bar:SetOrientation("VERTICAL") end
+        bar:SetStatusBarColor(colour[1], colour[2], colour[3], colour[4])
+        if disc then
+            local mask = bar:CreateMaskTexture()
+            mask:SetTexture(MEDIA .. "Disc", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            mask:SetAllPoints(disc)
+            bar:GetStatusBarTexture():AddMaskTexture(mask)
+            bar.mask = mask
+        end
+        bar:SetFrameLevel(level)
+        return bar
+    end
+    
+    P.healClip = Clip(base + 1)
+    P.heal = Overlay(P.healClip, HEAL, base + 2)
+    P.shieldClip = Clip(base + 3)
+    P.shield = Overlay(P.shieldClip, SHIELD, base + 4)
+    P.shield:SetReverseFill(true)
+    return P
+end
+
+
+
+
+
+
+local function PlacePrediction(P, w, h, on)
+    local fill = on and P.host:GetStatusBarTexture() or nil
+    for _, r in ipairs({ P.healClip, P.heal, P.shieldClip, P.shield }) do
+        r:ClearAllPoints()
+        r:SetShown(fill ~= nil)
+    end
+    if not fill then return end
+    local host = P.host
+    
+    
+    P.healClip:SetAllPoints(host)
+    
+    
+    
+    if P.vertical then
+        P.heal:SetPoint("BOTTOM", fill, "TOP")
+        P.shieldClip:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT")
+        P.shieldClip:SetPoint("TOPRIGHT", fill, "TOPRIGHT")
+        P.shield:SetPoint("TOP", fill, "TOP")
+    else
+        P.heal:SetPoint("LEFT", fill, "RIGHT")
+        P.shieldClip:SetPoint("TOPLEFT", host, "TOPLEFT")
+        P.shieldClip:SetPoint("BOTTOMRIGHT", fill, "BOTTOMRIGHT")
+        P.shield:SetPoint("RIGHT", fill, "RIGHT")
+    end
+    P.heal:SetSize(w, h)
+    P.shield:SetSize(w, h)
+end
+
 local function BuildMember(slot)
     if members[slot] then return members[slot] end
     local f = CreateFrame("Frame", "ThugUI_PartyMember" .. slot, MakeHolder())
@@ -395,19 +506,19 @@ local function BuildMember(slot)
     local level = f:GetFrameLevel()
 
     
+    f.pred = {}     
     f.bars = CreateFrame("Frame", nil, f)
     f.bars:SetAllPoints()
     f.healthBar = StatusBar(f.bars)
     f.healthBar.bg = f.healthBar:CreateTexture(nil, "BACKGROUND")
     f.healthBar.bg:SetAllPoints()
     f.healthBar.bg:SetColorTexture(0, 0, 0, 0.6)
+    f.pred.bars = MakePrediction(f.bars, f.healthBar, false)
     f.powerBar = StatusBar(f.bars)
     f.powerBar.bg = f.powerBar:CreateTexture(nil, "BACKGROUND")
     f.powerBar.bg:SetAllPoints()
     f.powerBar.bg:SetColorTexture(0, 0, 0, 0.6)
 
-    
-    
     
     
     f.square = CreateFrame("Frame", nil, f)
@@ -417,12 +528,10 @@ local function BuildMember(slot)
     f.square.bg:SetColorTexture(0, 0, 0, 0.6)
     f.square.health = StatusBar(f.square)
     f.square.health:SetOrientation("VERTICAL")
-    f.square.health2 = StatusBar(f.square)
-    f.square.health2:SetOrientation("VERTICAL")
-    f.square.health2:SetAllPoints(f.square.health)
-    f.square.health2:SetFrameLevel(f.square.health:GetFrameLevel() + 1)
+    f.pred.square = MakePrediction(f.square, f.square.health, true)
     f.edges = Edges(f.square)
-    f.edges2 = Edges(f.square)
+    
+    for _, e in ipairs(f.edges) do e:SetFrameLevel(f.square.health:GetFrameLevel() + PRED_LEVELS + 1) end
 
     
     f.circle = CreateFrame("Frame", nil, f)
@@ -432,28 +541,18 @@ local function BuildMember(slot)
     f.circle.bg:SetVertexColor(0, 0, 0, 0.6)
     f.circle.health = StatusBar(f.circle, MEDIA .. "Disc")
     f.circle.health:SetOrientation("VERTICAL")
-    f.circle.health2 = StatusBar(f.circle, MEDIA .. "Disc")
-    f.circle.health2:SetOrientation("VERTICAL")
-    f.circle.health2:SetAllPoints(f.circle.health)
-    f.circle.health2:SetFrameLevel(f.circle.health:GetFrameLevel() + 1)
+    f.pred.circle = MakePrediction(f.circle, f.circle.health, true, f.circle.health)
     f.ringHost = CreateFrame("Frame", nil, f.circle)
     f.ringBg = f.ringHost:CreateTexture(nil, "BORDER")
     f.ringBg:SetAllPoints()
     f.ring = Radial(f.ringHost)
-    f.ringB = Radial(f.ringHost)
-    f.ringB:SetFrameLevel(f.ring:GetFrameLevel() + 1)
-    f.ring2Host = CreateFrame("Frame", nil, f.circle)
-    f.ring2Host:SetAllPoints()
-    f.ring2Bg = f.ring2Host:CreateTexture(nil, "BORDER")
-    f.ring2Bg:SetAllPoints()
-    f.ring2 = Radial(f.ring2Host)
-    f.ring2B = Radial(f.ring2Host)
-    f.ring2B:SetFrameLevel(f.ring2:GetFrameLevel() + 1)
+    f.ringHost:SetFrameLevel(f.circle.health:GetFrameLevel() + PRED_LEVELS + 1)
+    f.ring:SetFrameLevel(f.ringHost:GetFrameLevel() + 1)
 
     
     f.over = CreateFrame("Frame", nil, f)
     f.over:SetAllPoints()
-    f.over:SetFrameLevel(level + 6)
+    f.over:SetFrameLevel(level + 10)   
     f.shade = f.over:CreateTexture(nil, "BACKGROUND")
     f.shade:SetColorTexture(0, 0, 0, 0.3)
     
@@ -535,7 +634,10 @@ function PF:SyncClicks()
     self.pendingClicks = false
     for slot = 1, SLOTS do
         local f, b = members[slot], nil
+        
+        
         local want = holder and holder:IsShown() and f and f:IsShown() and f.unit and not f.sample
+            and Cfg().unlocked ~= true
         if want then b = ClickButton(slot) else b = clicks[slot] end
         if b then
             if want then
@@ -594,23 +696,37 @@ end
 
 
 
-local function DressRing(bar, extra, bg, tex, shown)
-    for _, b in ipairs({ bar, extra }) do
-        b:SetStatusBarTexture(tex)
-        b:SetShown(shown and b.radial == true)
-        local rt = b:GetStatusBarTexture()
-        if rt and rt.SetRadialProgressBarStartOffset then rt:SetRadialProgressBarStartOffset(0.5) end
-    end
+local function DressRing(bar, bg, tex, shown)
+    bar:SetStatusBarTexture(tex)
+    bar:SetShown(shown and bar.radial == true)
+    local rt = bar:GetStatusBarTexture()
+    if rt and rt.SetRadialProgressBarStartOffset then rt:SetRadialProgressBarStartOffset(0.5) end
     bg:SetTexture(tex)
     bg:SetShown(shown)
 end
 
 
+
 local function RingOn(c, which)
     if which == 1 then return c.showResource ~= false end
-    return c.ring2On == true
+    return false
 end
 PF.RingOn = RingOn
+
+
+
+
+
+
+local function PredictionFor(f, c)
+    if c.prediction ~= true then return nil end
+    if c.shape == "bars" then
+        if c.showHealth == false then return nil end
+        return f.pred.bars
+    end
+    if SourceOf(c.bgSource or "health") ~= "health" then return nil end
+    return c.shape == "square" and f.pred.square or f.pred.circle
+end
 
 
 
@@ -631,10 +747,13 @@ local function LayoutMember(f, c, shared)
     f.status:ClearAllPoints()
     f.shade:ClearAllPoints()
     local ix, iy = Num(c.iconX, 0), Num(c.iconY, 0)
+    
+    local fillW, fillH = 0, 0
 
     if c.shape == "bars" then
         local showH, showP = c.showHealth ~= false, c.showPower ~= false
         local hh, ph = Num(c.healthHeight, 24), Num(c.powerHeight, 6)
+        fillW, fillH = w, hh
         f.healthBar:SetShown(showH)
         f.healthBar:ClearAllPoints()
         f.healthBar:SetPoint("TOPLEFT")
@@ -669,32 +788,25 @@ local function LayoutMember(f, c, shared)
         f.shade:SetAllPoints(f)
     else
         local s = Num(c.size, 56)
-        local on1, on2 = RingOn(c, 1), RingOn(c, 2)
-        local gap1, gap2 = Num(c.gap, 2), Num(c.ring2Gap, 2)
+        local on1 = RingOn(c, 1)
+        local gap1 = Num(c.gap, 2)
         local inset
         if c.shape == "square" then
             
-            local e2 = on2 and Num(c.ring2Edge, 3) or 0
-            local out2 = on2 and (e2 + gap2) or 0
             local e1 = on1 and Num(c.edge, 4) or 0
-            PlaceEdges(f.edges2, 0, e2, on2)
-            PlaceEdges(f.edges, out2, e1, on1)
-            inset = out2 + (on1 and (e1 + gap1) or 0)
+            PlaceEdges(f.edges, 0, e1, on1)
+            inset = on1 and (e1 + gap1) or 0
             f.square.health:ClearAllPoints()
             f.square.health:SetPoint("TOPLEFT", inset, -inset)
             f.square.health:SetPoint("BOTTOMRIGHT", -inset, inset)
         else
             
-            
-            local tex2, t2 = PF.RingTexture(c.ring2Ring or 6)
-            local out2 = on2 and (s * t2 / 100 + gap2) or 0
-            DressRing(f.ring2, f.ring2B, f.ring2Bg, tex2, on2)
             f.ringHost:ClearAllPoints()
-            f.ringHost:SetPoint("TOPLEFT", out2, -out2)
-            f.ringHost:SetPoint("BOTTOMRIGHT", -out2, out2)
+            f.ringHost:SetPoint("TOPLEFT", 0, 0)
+            f.ringHost:SetPoint("BOTTOMRIGHT", 0, 0)
             local tex1, t1 = PF.RingTexture(c.ring)
-            DressRing(f.ring, f.ringB, f.ringBg, tex1, on1)
-            inset = out2 + (on1 and ((s - out2 * 2) * t1 / 100 + gap1) or 0)
+            DressRing(f.ring, f.ringBg, tex1, on1)
+            inset = on1 and (s * t1 / 100 + gap1) or 0
             f.circle.bg:ClearAllPoints()
             f.circle.bg:SetPoint("TOPLEFT", inset, -inset)
             f.circle.bg:SetPoint("BOTTOMRIGHT", -inset, inset)
@@ -703,6 +815,9 @@ local function LayoutMember(f, c, shared)
             f.circle.health:SetPoint("BOTTOMRIGHT", -inset, inset)
         end
         local inner = s - inset * 2
+        
+        
+        fillW, fillH = inner, inner
         local isz = inner * 0.55 * Num(c.iconScale, 1)
         f.icon:SetSize(isz, isz)
         f.icon:SetPoint("CENTER", ix, iy)
@@ -714,6 +829,10 @@ local function LayoutMember(f, c, shared)
         f.shade:SetPoint("TOPLEFT", inset, -inset)
         f.shade:SetPoint("BOTTOMRIGHT", -inset, inset)
     end
+    
+    
+    local active = PredictionFor(f, c)
+    for _, P in pairs(f.pred) do PlacePrediction(P, fillW, fillH, P == active) end
     
     local round = c.shape == "circle" and c.iconRound ~= false and f.iconMask ~= nil
     if round ~= (f.iconMasked == true) and f.icon.AddMaskTexture then
@@ -956,8 +1075,6 @@ local function ClassColor(unit)
 end
 
 local GREEN = { 0.2, 0.8, 0.25 }
-local HEALS = { 0.25, 0.9, 0.45 }
-local ABSORBS = { 0.85, 0.9, 1 }
 
 local function HealthColor(unit, c)
     if c.classColor ~= false then
@@ -981,7 +1098,6 @@ local function LayerColor(mode, source, unit, c, rgb)
         return PowerColor(unit)
     end
     if source == "power" then return PowerColor(unit) end
-    if source == "heals" then return HEALS[1], HEALS[2], HEALS[3] end
     return HealthColor(unit, c)
 end
 PF.LayerColor = LayerColor
@@ -1029,31 +1145,16 @@ local function ReadUnit(unit, sample, slot, wantsPct)
 end
 
 
-local function Feed(bar, extra, source, d, r, g, b)
+local function Feed(bar, source, d, r, g, b)
     if source == "power" then
         bar:SetMinMaxValues(0, d.pMax)
         bar:SetValue(V(d.pVal))
-    elseif source == "heals" then
-        bar:SetMinMaxValues(0, d.hMax)
-        bar:SetValue(V(d.heal))
     else
         bar:SetMinMaxValues(0, d.hMax)
         bar:SetValue(V(d.hVal))
     end
     bar:SetStatusBarColor(r, g, b)
-    if extra then
-        if source == "heals" then
-            extra:SetMinMaxValues(0, d.hMax)
-            extra:SetValue(V(d.absorb))
-            extra:SetStatusBarColor(ABSORBS[1], ABSORBS[2], ABSORBS[3], 0.85)
-            extra:Show()
-        else
-            extra:Hide()
-        end
-    end
 end
-
-
 
 
 local function FeedEdges(E, source, d, r, g, b)
@@ -1067,42 +1168,44 @@ end
 
 
 
+
+
+local function FeedPrediction(P, d)
+    P.heal:SetMinMaxValues(0, d.hMax)
+    P.heal:SetValue(V(d.heal))
+    P.shield:SetMinMaxValues(0, d.hMax)
+    P.shield:SetValue(V(d.absorb))
+end
+
+
+
 local function UpdateBars(f, unit, c, sample)
     local cu = sample and "player" or unit
     local d = ReadUnit(unit, sample, f.slot, c.shape == "square")
+    local P = PredictionFor(f, c)
     if c.shape == "bars" then
         local hr, hg, hb = HealthColor(cu, c)
-        Feed(f.healthBar, nil, "health", d, hr, hg, hb)
+        Feed(f.healthBar, "health", d, hr, hg, hb)
         local pr, pg, pb = PowerColor(cu)
-        Feed(f.powerBar, nil, "power", d, pr, pg, pb)
+        Feed(f.powerBar, "power", d, pr, pg, pb)
+        if P then FeedPrediction(P, d) end
         return
     end
-    local bgSource = c.bgSource or "health"
+    local bgSource = SourceOf(c.bgSource or "health")
     local br, bg, bb = LayerColor(c.bgColor, bgSource, cu, c, c.bgRGB)
-    local s1, s2 = c.ring1Source or "power", c.ring2Source or "heals"
-    
-    
-    if c.shape == "square" then
-        if s1 == "heals" then s1 = "power" end
-        if s2 == "heals" then s2 = "power" end
-    end
+    local s1 = SourceOf(c.ring1Source or "power")
     local r1, g1, b1 = LayerColor(c.ring1Color, s1, cu, c, c.ring1RGB)
-    local r2, g2, b2 = LayerColor(c.ring2Color, s2, cu, c, c.ring2RGB)
     if c.shape == "square" then
-        Feed(f.square.health, f.square.health2, bgSource, d, br, bg, bb)
+        Feed(f.square.health, bgSource, d, br, bg, bb)
         if RingOn(c, 1) then FeedEdges(f.edges, s1, d, r1, g1, b1) end
-        if RingOn(c, 2) then FeedEdges(f.edges2, s2, d, r2, g2, b2) end
     else
-        Feed(f.circle.health, f.circle.health2, bgSource, d, br, bg, bb)
+        Feed(f.circle.health, bgSource, d, br, bg, bb)
         if RingOn(c, 1) then
-            Feed(f.ring, f.ringB, s1, d, r1, g1, b1)
+            Feed(f.ring, s1, d, r1, g1, b1)
             f.ringBg:SetVertexColor(r1, g1, b1, 0.2)
         end
-        if RingOn(c, 2) then
-            Feed(f.ring2, f.ring2B, s2, d, r2, g2, b2)
-            f.ring2Bg:SetVertexColor(r2, g2, b2, 0.2)
-        end
     end
+    if P then FeedPrediction(P, d) end
 end
 
 function PF:UpdateMember(f)
@@ -1174,19 +1277,26 @@ end
 
 
 
+
+
 local SAMPLE_ROLE = { "TANK", "HEALER", "DAMAGER", "DAMAGER", "DAMAGER" }
 
 function PF:AssignUnits()
     local c = Cfg()
     local units = Units()
     local inParty = IsInGroup() and not IsInRaid()
-    local sampleAll = c.unlocked == true and not inParty
+    local sampleAll = c.unlocked == true
     for slot = 1, SLOTS do
         local f = BuildMember(slot)
         local unit = units[slot]
         f.sample = nil
         f.role = nil
-        if sampleAll and unit then
+        if sampleAll and unit == "player" then
+            f.unit = "player"
+            local role = SafeSecret(UnitGroupRolesAssigned("player"))
+            if role ~= "TANK" and role ~= "HEALER" and role ~= "DAMAGER" then role = nil end
+            f.role = role
+        elseif sampleAll and unit then
             f.unit, f.sample = unit, true
             
             f.role = SAMPLE_ROLE[slot]
@@ -1272,6 +1382,8 @@ end)
 
 
 driver:SetScript("OnUpdate", function(self, elapsed)
+    
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("partyframes") then self:SetScript("OnUpdate", nil) return end
     self.since = self.since + elapsed
     if self.since < 0.5 then return end
     self.since = 0

@@ -70,6 +70,7 @@ end
 
 
 local lastSpellID
+local WatchSent   
 
 local function GCDSpell()
     
@@ -84,6 +85,7 @@ end
 
 
 function CT:ReadGCD()
+    WatchSent()
     local spellID, fromCast = GCDSpell()
     local obj
     if C_Spell and C_Spell.GetSpellCooldownDuration then
@@ -183,12 +185,19 @@ CT.driver = CreateFrame("Frame")
 
 
 
+
+
 CT.sentWatch = CreateFrame("Frame")
 CT.sentWatch:SetScript("OnEvent", function(_, _, unit, _, _, spellID)
     if unit and unit ~= "player" then return end
     lastSpellID = Plain(spellID) or lastSpellID
 end)
-pcall(CT.sentWatch.RegisterUnitEvent, CT.sentWatch, "UNIT_SPELLCAST_SENT", "player")
+local watchingSent = false
+function WatchSent()
+    if watchingSent then return end
+    watchingSent = true
+    pcall(CT.sentWatch.RegisterUnitEvent, CT.sentWatch, "UNIT_SPELLCAST_SENT", "player")
+end
 
 CT.driver:SetScript("OnEvent", function(_, event, unit, _, _, spellID)
     

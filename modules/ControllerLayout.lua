@@ -309,7 +309,7 @@ function CL:ApplyAura(key)
         f:SetAlpha(0)
         auraAlphaSet[key] = true
     elseif V and not V:IsDefault(vKey) then
-        f:SetAlpha(EditModeOpacity(f) * V:Alpha(vKey))
+        f:SetAlpha(EditModeOpacity(f) * V:CurrentAlpha(vKey))
         auraAlphaSet[key] = true
     elseif auraAlphaSet[key] then
         f:SetAlpha(EditModeOpacity(f))

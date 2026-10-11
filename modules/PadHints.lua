@@ -208,6 +208,9 @@ local login = CreateFrame("Frame")
 login:RegisterEvent("PLAYER_LOGIN")
 login:RegisterEvent("ADDON_LOADED")
 login:SetScript("OnEvent", function(self, event, name)
+    
+    
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("controller") then self:UnregisterAllEvents() return end
     if event == "ADDON_LOADED" and name ~= "Blizzard_Gamepad" then return end
     local ok, err = pcall(PH.Install, PH)
     if not ok and ThugUI.Diagnostics then ThugUI.Diagnostics:Log("PADHINTS", "install failed: %s", tostring(err)) end

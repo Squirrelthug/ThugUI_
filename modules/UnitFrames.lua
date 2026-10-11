@@ -154,72 +154,37 @@ function UF:Active()
     return false
 end
 
-function UF:OnLogout()
-    if not ThugUI.unitFramesMouse then return end
-    ThugUIDB.UnitFramesMouse = ThugUIDB.UnitFramesMouse or {}
-    for _, name in ipairs(UF.TABLES) do
-        if UF.reset[name] then
-            ThugUIDB.UnitFramesMouse[name] = nil
-        elseif UF.base[name] and ThugUIDB[name] then
-            ThugUIDB.UnitFramesMouse[name] = Diff(ThugUIDB[name], UF.base[name])
-        end
-        
-        
-        
-        if UF.base[name] then ThugUIDB[name] = UF.base[name] end
-    end
-    if next(ThugUIDB.UnitFramesMouse) == nil then
-        ThugUIDB.UnitFramesMouse = nil
-    end
-end
+
+
+
+
+
+
+function UF:OnLogout() end
 
 function UF:ApplyLayer()
-    if not ThugUI.unitFramesMouse then
-        if self.logoutFrame then
-            self.logoutFrame:UnregisterEvent("PLAYER_LOGOUT")
-        end
-        self.logoutRegistered = false
-        if not self.loggedController then
-            self.loggedController = true
-            if ThugUI.Diagnostics then
-                ThugUI.Diagnostics:Log("UNITFRAMES", "controller layer (base)")
-            end
-        end
-        return
-    end
-
-    UF.base = UF.base or {}
-    ThugUIDB.UnitFramesMouse = ThugUIDB.UnitFramesMouse or {}
-
-    local leafCount = 0
-    for _, name in ipairs(UF.TABLES) do
-        if UF.base[name] == nil then
-            UF.base[name] = ThugUIDB[name]
-        end
-        local mouseDiff = ThugUIDB.UnitFramesMouse[name]
-        ThugUIDB[name] = Merge(DeepCopy(UF.base[name] or {}), mouseDiff or {})
-        if mouseDiff then
-            leafCount = leafCount + CountLeaves(mouseDiff)
-        end
-    end
-
+    if self.logged then return end
+    self.logged = true
     if ThugUI.Diagnostics then
-        ThugUI.Diagnostics:Log("UNITFRAMES", string.format("mouse layer, %d differences", leafCount))
+        ThugUI.Diagnostics:Log("UNITFRAMES", ThugUI.unitFramesMouse and "mouse copy" or "controller copy (or retail)")
     end
-
-    if not self.logoutFrame then
-        self.logoutFrame = CreateFrame("Frame")
-        self.logoutFrame:SetScript("OnEvent", function()
-            UF:OnLogout()
-        end)
-    end
-    self.logoutFrame:RegisterEvent("PLAYER_LOGOUT")
-    self.logoutRegistered = true
 end
 
+
+
 function UF:Reset(name)
-    if ThugUIDB and ThugUIDB.UnitFramesMouse then
-        ThugUIDB.UnitFramesMouse[name] = nil
+    local P = ThugUI.Profiles
+    local live = ThugUIDB and ThugUIDB[name]
+    if P and type(live) == "table" and not (P.liveModes and P.liveModes[name]) then
+        local p = P:Store().profiles[P.active]
+        local scope = P.liveScopes and P.liveScopes[name]
+        local bucket = scope and P:LayerFor(scope) or (p and p.db)
+        local src = bucket and bucket[name .. P.PAD_SUFFIX]
+        if type(src) == "table" then
+            local copy = DeepCopy(src)
+            wipe(live)
+            for k, v in pairs(copy) do live[k] = v end
+        end
     end
     UF.reset[name] = true
     ThugUI.Dialog:Show("THUGUI_UNITFRAMES_RELOAD")

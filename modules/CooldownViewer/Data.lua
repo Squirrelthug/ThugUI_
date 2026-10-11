@@ -416,10 +416,15 @@ end
 
 Data.DefaultProfile = DefaultProfile
 
+
+
+
+
 local function Store()
-    ThugUI_Config.cv = ThugUI_Config.cv or {}
-    ThugUI_Config.cv.profiles = ThugUI_Config.cv.profiles or {}
-    return ThugUI_Config.cv
+    ThugUIDB.CooldownViewer = ThugUIDB.CooldownViewer or {}
+    local cv = ThugUIDB.CooldownViewer
+    cv.profiles = cv.profiles or {}
+    return cv
 end
 
 

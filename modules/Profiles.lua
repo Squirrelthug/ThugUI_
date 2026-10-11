@@ -265,6 +265,148 @@ function P:MigrateKeys()
 end
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+P.PAD_SUFFIX = "_Pad"
+
+P.MODE_KEYS_LAYERED = { "Orbs", "ResourcePips", "ControllerTarget", "PartyFrames", "Visibility" }
+
+P.MODE_KEYS_SHARED = { "Dialogue", "Camera", "Nameplates", "FrameHider", "CooldownViewer" }
+P.MODE_KEYS = {}
+for _, k in ipairs(P.MODE_KEYS_LAYERED) do P.MODE_KEYS[#P.MODE_KEYS + 1] = k end
+for _, k in ipairs(P.MODE_KEYS_SHARED) do P.MODE_KEYS[#P.MODE_KEYS + 1] = k end
+P.MODE_KEY_SET = {}
+for _, k in ipairs(P.MODE_KEYS) do P.MODE_KEY_SET[k] = true end
+
+
+
+local function Buckets(profile)
+    local list = { profile.db }
+    if type(profile.layers) == "table" then
+        for _, group in pairs(profile.layers) do
+            for _, bucket in pairs(type(group) == "table" and group or {}) do
+                if type(bucket) == "table" then list[#list + 1] = bucket end
+            end
+        end
+    end
+    return list
+end
+
+
+
+
+
+P.FRAMEHIDER_FLAT = { "hideStanceBar", "hideBagButtons", "hideCharacterFrame", "hideCastBar",
+    "hideObjectiveTracker", "trackerInstanceCombat", "hideShardNotice", "shardNoticePoint" }
+
+function P:MigrateFlatTables()
+    local count = 0
+    for _, profile in pairs(self:Store().profiles) do
+        if type(profile) == "table" and type(profile.config) == "table" then
+            if type(profile.db) ~= "table" then profile.db = {} end
+            local c, d, changed = profile.config, profile.db, false
+            if d.FrameHider == nil then
+                local t
+                for _, k in ipairs(self.FRAMEHIDER_FLAT) do
+                    if c[k] ~= nil then t = t or {}; t[k] = DeepCopy(c[k]) end
+                end
+                if t then d.FrameHider = t; changed = true end
+            end
+            if d.CooldownViewer == nil and type(c.cv) == "table" then
+                d.CooldownViewer = DeepCopy(c.cv)
+                changed = true
+            end
+            if changed then count = count + 1 end
+        end
+    end
+    return count
+end
+
+
+
+
+
+
+function P:MigrateModes()
+    local count = 0
+    local UF = ThugUI.UnitFrames
+    for _, profile in pairs(self:Store().profiles) do
+        if type(profile) == "table" and profile.modesVersion ~= 1 then
+            if type(profile.db) ~= "table" then profile.db = {} end
+            if ThugUI.client == "forever" and UF and UF.Merge then
+                local diffs = type(profile.db.UnitFramesMouse) == "table" and profile.db.UnitFramesMouse or {}
+                for _, t in ipairs(Buckets(profile)) do
+                    for _, k in ipairs(self.MODE_KEYS_LAYERED) do
+                        local pk = k .. self.PAD_SUFFIX
+                        if type(t[k]) == "table" and t[pk] == nil then
+                            t[pk] = t[k]
+                            t[k] = UF.Merge(DeepCopy(t[k]), DeepCopy(diffs[k] or {}))
+                        end
+                    end
+                    for _, k in ipairs(self.MODE_KEYS_SHARED) do
+                        local pk = k .. self.PAD_SUFFIX
+                        if type(t[k]) == "table" and t[pk] == nil then t[pk] = DeepCopy(t[k]) end
+                    end
+                end
+            end
+            profile.modesVersion = 1
+            count = count + 1
+        end
+    end
+    return count
+end
+
+
+
+
+function P:ComputePadAtLoad()
+    local M, CM = ThugUI.Modules, ThugUI.ControllerMode
+    if not (M and CM and CM.IsActive) then return false end
+    local entry = M:Entry("controller")
+    if not (entry and M:ForClient(entry)) then return false end
+    if not M:Stored("controller") then return false end
+    local ok, active = pcall(CM.IsActive, CM)
+    return ok and active == true
+end
+
+
+
+
+
+function P:WriteTop(k, v)
+    local live = _G.ThugUIDB
+    if type(live) ~= "table" then return end
+    rawset(live, k, v)
+    if rawequal(live, self.live) then
+        local scope = self.liveScopes and self.liveScopes[k]
+        local bucket = scope and self:LayerFor(scope)
+        local profile = self:Store().profiles[self.active]
+        local store = bucket or (profile and profile.db)
+        if type(store) == "table" then store[self:StoreKey(k)] = v end
+    end
+end
+
+
+function P:StoreKey(k)
+    if self.liveModes and self.liveModes[k] then return k .. self.PAD_SUFFIX end
+    return k
+end
+
+
 function P:Bootstrap()
     local s = self:Store()
     local migrated = false
@@ -297,6 +439,11 @@ function P:Bootstrap()
     
     
     self.keysRenamed = self:MigrateKeys()
+
+    
+    
+    self.flatMoved = self:MigrateFlatTables()
+    self.modesMigrated = self:MigrateModes()
 
     
     
@@ -353,24 +500,45 @@ function P:Bootstrap()
         end
     end
     
+    self.liveModes = {}
     setmetatable(live, {
         __index = db,
         __newindex = function(t, k, v)
             rawset(t, k, v)
+            local sk = self:StoreKey(k)
             local scope = self.liveScopes[k]
             if scope then
                 local bucket = self:LayerFor(scope)
                 if bucket then
-                    bucket[k] = v
+                    bucket[sk] = v
                 end
             else
-                db[k] = v
+                db[sk] = v
             end
         end
     })
     
     _G.ThugUIDB = live
     self.live = live
+
+    
+    
+    
+    
+    self.padAtLoad = self:ComputePadAtLoad()
+    self.padFresh = {}
+    if self.padAtLoad then
+        for _, k in ipairs(self.MODE_KEYS) do
+            local bucket = self.liveScopes[k] and self:LayerFor(self.liveScopes[k]) or db
+            local pk = k .. self.PAD_SUFFIX
+            if bucket[pk] == nil then
+                bucket[pk] = {}
+                self.padFresh[k] = true
+            end
+            rawset(live, k, bucket[pk])
+            self.liveModes[k] = true
+        end
+    end
 
     
     
@@ -465,24 +633,28 @@ function P:SetScope(key, scope, mode)
         if not bucket then return false, "unresolved" end
         
         
-        if bucket[key] == nil then
-            bucket[key] = {}
+        local sk = self:StoreKey(key)
+        if bucket[sk] == nil then
+            bucket[sk] = {}
         end
         p.scopes[key] = scope
     elseif scope == "shared" then
+        
+        
+        local sk = self:StoreKey(key)
         if mode == "discard" then
             local oldBucket = self:LayerFor(currentScope)
             if oldBucket then
-                oldBucket[key] = nil
+                oldBucket[sk] = nil
             end
         elseif mode == "promote" then
-            p.db[key] = p.db[key] or {}
-            wipe(p.db[key])
+            p.db[sk] = p.db[sk] or {}
+            wipe(p.db[sk])
             local copy = DeepCopy(_G.ThugUIDB[key] or {})
-            for k, v in pairs(copy) do p.db[key][k] = v end
+            for k, v in pairs(copy) do p.db[sk][k] = v end
             local oldBucket = self:LayerFor(currentScope)
             if oldBucket then
-                oldBucket[key] = nil
+                oldBucket[sk] = nil
             end
         end
         p.scopes[key] = nil
@@ -570,6 +742,128 @@ function P:CopyFrom(key, id)
     local copy = DeepCopy(src)
     wipe(dest)
     for k, v in pairs(copy) do dest[k] = v end
+    return true
+end
+
+
+
+
+
+
+
+
+
+
+function P:PageHasModes(keys)
+    if ThugUI.client ~= "forever" then return false end
+    for _, k in ipairs(keys or {}) do
+        if self.MODE_KEY_SET[k] then return true end
+    end
+    return false
+end
+
+
+local function SourceFor(self, k, id)
+    local mode, loc = tostring(id):match("^([mp])|(.+)$")
+    if not mode then return nil end
+    local sk = (mode == "p" and self.MODE_KEY_SET[k]) and (k .. self.PAD_SUFFIX) or k
+    local s = self:Store()
+    local profile = s.profiles[self.active]
+    if not profile then return nil end
+    if loc == "shared" then return profile.db and profile.db[sk] end
+    local layers = Layers(profile)
+    local f = loc:match("^faction:(.+)$")
+    if f then return layers.faction[f] and layers.faction[f][sk] end
+    local ck = loc:match("^char:(.+)$")
+    if ck then return layers.char[ck] and layers.char[ck][sk] end
+    return nil
+end
+P.SourceFor = SourceFor
+
+
+function P:HereSourceID(k)
+    return ((self.padAtLoad and self.MODE_KEY_SET[k]) and "p|" or "m|") .. HereID(self, k)
+end
+
+
+local function MatchesDefaults(t, d)
+    if type(t) ~= "table" then return t == d end
+    for key, v in pairs(t) do
+        local dv = type(d) == "table" and d[key] or nil
+        if type(v) == "table" then
+            if not MatchesDefaults(v, dv) then return false end
+        elseif v ~= dv then
+            return false
+        end
+    end
+    return true
+end
+P.MatchesDefaults = MatchesDefaults
+
+
+
+
+
+function P:CopyRows(keys)
+    local rows = {}
+    if not self.active or type(keys) ~= "table" or #keys == 0 then return rows end
+    local profile = self:Store().profiles[self.active]
+    if not profile then return rows end
+    local layers = Layers(profile)
+    local here = self:HereSourceID(keys[1])
+    local modes = self:PageHasModes(keys) and { "m", "p" } or { "m" }
+    local function AddRow(mode, loc, scope, who)
+        local id = mode .. "|" .. loc
+        local any, changed = false, false
+        for _, k in ipairs(keys) do
+            local t = SourceFor(self, k, id)
+            if type(t) == "table" then
+                any = true
+                local d = ThugUI.defaults and ThugUI.defaults[k]
+                if d == nil then
+                    if next(t) ~= nil then changed = true end
+                elseif not MatchesDefaults(t, d) then
+                    changed = true
+                end
+            end
+        end
+        local isHere = id == here
+        if any or isHere then
+            rows[#rows + 1] = { id = id, mode = mode, scope = scope, who = who, here = isHere, changed = changed }
+        end
+    end
+    for _, mode in ipairs(modes) do
+        local chars = {}
+        for name in pairs(layers.char) do chars[#chars + 1] = name end
+        table.sort(chars)
+        for _, name in ipairs(chars) do
+            AddRow(mode, "char:" .. name, "Character", (name:match("^([^%-]+)") or name))
+        end
+        local factions = {}
+        for name in pairs(layers.faction) do factions[#factions + 1] = name end
+        table.sort(factions)
+        for _, name in ipairs(factions) do AddRow(mode, "faction:" .. name, "Faction", name) end
+        AddRow(mode, "shared", "Shared", 'Profile "' .. tostring(self.active) .. '"')
+    end
+    return rows
+end
+
+
+
+
+function P:CopyFromSource(k, id)
+    if not self.active then return false, "unknown" end
+    if id == self:HereSourceID(k) then return false, "same" end
+    local src = SourceFor(self, k, id)
+    if type(src) ~= "table" then return false, "empty" end
+    local dest = _G.ThugUIDB and _G.ThugUIDB[k]
+    if type(dest) ~= "table" then
+        _G.ThugUIDB[k] = {}
+        dest = _G.ThugUIDB[k]
+    end
+    local copy = DeepCopy(src)
+    wipe(dest)
+    for key, v in pairs(copy) do dest[key] = v end
     return true
 end
 
@@ -964,6 +1258,17 @@ function P:Export()
     for k, v in pairs(_G.ThugUIDB or {}) do
         if type(k) == "string" then db[k] = PlainCopy(v) end
     end
+    
+    
+    
+    for _, k in ipairs(self.MODE_KEYS) do
+        local bucket = (self.liveScopes and self.liveScopes[k] and self:LayerFor(self.liveScopes[k])) or (s and s.db)
+        if type(bucket) == "table" then
+            local pk = k .. self.PAD_SUFFIX
+            if bucket[k] ~= nil then db[k] = PlainCopy(bucket[k]) end
+            if bucket[pk] ~= nil then db[pk] = PlainCopy(bucket[pk]) end
+        end
+    end
     local payload = {
         app = "ThugUI",
         major = P.Major(),
@@ -980,6 +1285,9 @@ function P:Export()
         
         
         scopes = PlainCopy((s and s.scopes) or {}),
+        
+        
+        modesVersion = s and s.modesVersion,
     }
     local ok, out = pcall(function()
         return E.EncodeBase64(E.CompressString(E.SerializeCBOR(payload)))
@@ -1026,7 +1334,8 @@ function P:Import(text, name)
         final = base .. " " .. n
         n = n + 1
     end
-    local profile = { config = PlainCopy(payload.config), db = PlainCopy(payload.db), scopes = {}, layers = {} }
+    local profile = { config = PlainCopy(payload.config), db = PlainCopy(payload.db), scopes = {}, layers = {},
+        modesVersion = payload.modesVersion == 1 and 1 or nil }
     
     
     if type(payload.scopes) == "table" then
@@ -1040,6 +1349,9 @@ function P:Import(text, name)
     for k, scope in pairs(profile.scopes) do
         local bucket = self:LayerFor(scope, final)
         if bucket and type(profile.db[k]) == "table" then bucket[k] = DeepCopy(profile.db[k]) end
+        
+        local pk = k .. self.PAD_SUFFIX
+        if bucket and self.MODE_KEY_SET[k] and type(profile.db[pk]) == "table" then bucket[pk] = DeepCopy(profile.db[pk]) end
     end
     return final
 end

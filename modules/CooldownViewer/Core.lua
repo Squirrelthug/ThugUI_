@@ -31,8 +31,10 @@ CV.previewMode = false
 
 
 
+
+
 function CV:IsLegacyMode()
-    return ThugUI_Config and ThugUI_Config.cvUseLegacy and true or false
+    return false
 end
 
 
@@ -1423,7 +1425,14 @@ CV.driver = driver
 
 local elapsedSinceUpdate = 0
 
-driver:SetScript("OnUpdate", function(_, elapsed)
+driver:SetScript("OnUpdate", function(self, elapsed)
+    
+    
+    
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("cooldowns") then
+        self:SetScript("OnUpdate", nil)
+        return
+    end
     elapsedSinceUpdate = elapsedSinceUpdate + elapsed
     if elapsedSinceUpdate >= UPDATE_INTERVAL then
         elapsedSinceUpdate = 0
@@ -1555,20 +1564,8 @@ SlashCmdList["THUGCV"] = function(msg)
     msg = (msg or ""):lower():match("^%s*(.-)%s*$")
 
     if msg == "legacy" then
-        ThugUI_Config.cvUseLegacy = not ThugUI_Config.cvUseLegacy
-        local ER = ThugUI.EssentialRings
-        if ThugUI.Diagnostics then
-            ThugUI.Diagnostics:Log("CV", "legacy bars %s",
-                ThugUI_Config.cvUseLegacy and "ENABLED" or "disabled")
-        end
-        if ThugUI_Config.cvUseLegacy then
-            if CV.container then CV.container:Hide() end
-            print("|cff00ff00ThugUI:|r cooldown viewer switched to the |cffffd100legacy|r ECV/BCV/GCV bars.")
-        else
-            CV:Rebuild()
-            print("|cff00ff00ThugUI:|r cooldown viewer switched to the |cff00ffccgrid|r engine.")
-        end
-        if ER and ER.UpdateVisibility then ER:UpdateVisibility() end
+        
+        print("|cff00ff00ThugUI:|r the legacy ECV/BCV/GCV bars are retired; the grid is the cooldown viewer.")
         return
     end
 

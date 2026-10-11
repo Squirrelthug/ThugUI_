@@ -23,13 +23,9 @@ local ROLE_TITLES = {
     DAMAGER = { tab = "Damage", plural = "damage dealers" },
 }
 
-local SOURCES = {
-    { value = "health", text = "Health" },
-    { value = "power", text = "Resource" },
-    { value = "heals", text = "Heals & absorbs" },
-}
 
-local EDGE_SOURCES = {
+
+local SOURCES = {
     { value = "health", text = "Health" },
     { value = "power", text = "Resource" },
 }
@@ -54,20 +50,16 @@ local function Editor(panel, S)
     end
     Gate()
 
-    local function SourceAndColour(srcKey, colKey, rgbKey, sources, shape)
+    local function SourceAndColour(srcKey, colKey, rgbKey)
         panel:Dropdown{
-            label = "Shows", options = sources,
+            label = "Shows", options = SOURCES,
             
-            get = function()
-                local v = S.get(srcKey)
-                if shape == "square" and v == "heals" and srcKey ~= "bgSource" then return "power" end
-                return v
-            end,
+            get = function() return PF().SourceOf(S.get(srcKey)) end,
             set = function(v) S.set(srcKey, v) end,
         }
         panel:Dropdown{
             label = "Colour", options = COLORS,
-            tooltip = "Automatic: class colour for health, the resource's own colour, green for heals.",
+            tooltip = "Automatic: class colour for health, the resource's own colour.",
             get = function() return S.get(colKey) or "auto" end,
             set = function(v) S.set(colKey, v); panel:Refresh() end,
         }
@@ -98,12 +90,14 @@ local function Editor(panel, S)
             set = function(v) S.set("iconScale", v) end,
         }
         panel:Slider{
-            label = "Icon X", min = -30, max = 30, step = 1, format = "%d",
+            
+            label = "Icon X", min = -30, max = 30, step = 0.1, format = "%.1f",
             get = function() return S.get("iconX") or 0 end,
             set = function(v) S.set("iconX", v) end,
         }
         panel:Slider{
-            label = "Icon Y", min = -30, max = 30, step = 1, format = "%d",
+            
+            label = "Icon Y", min = -30, max = 30, step = 0.1, format = "%.1f",
             get = function() return S.get("iconY") or 0 end,
             set = function(v) S.set("iconY", v) end,
         }
@@ -118,39 +112,56 @@ local function Editor(panel, S)
     end
 
     
+    
+    
+    local function Prediction()
+        panel:Checkbox{
+            label = "Show shields and incoming heals",
+            tooltip = "A shield shows as a see-through white layer over the top end of health; an "
+                .. "incoming heal as a light green layer from where health ends, never past full. "
+                .. "They draw on the health bar, the square's background or the circle's disc, "
+                .. "wherever health fills (not on a ring or line).",
+            get = function() return S.get("prediction") == true end,
+            set = function(v) S.set("prediction", v) end,
+        }
+    end
+
+    
     local function Layered(shape)
         local isCircle = shape == "circle"
         local ringWord = isCircle and "Ring" or "Line"
+        
         panel:Note(isCircle
-            and "Health fills the disc; two rings can run round it. Pick a part to set it up."
-            or "Health fills the square; two lines can run round its edge, clockwise from the top left. "
+            and "Health fills the disc; a ring can run round it. Pick a part to set it up."
+            or "Health fills the square; a line can run round its edge, clockwise from the top left. "
                 .. "Pick a part to set it up.")
         panel:Slider{
             label = "Size", min = 24, max = 160, step = 1, format = "%d",
             get = function() return S.get("size") end,
             set = function(v) S.set("size", v) end,
         }
+        Prediction()
         panel:Switch{
             options = {
-                { value = "bg", text = "Background" }, { value = "ring1", text = ringWord .. " 1" },
-                { value = "ring2", text = ringWord .. " 2" }, { value = "icon", text = "Icon" },
+                { value = "bg", text = "Background" }, { value = "ring1", text = ringWord },
+                { value = "icon", text = "Icon" },
             },
             get = function() return ui[shape] end,
             set = function(v) ui[shape] = v end,
         }
         panel:Case("bg")
         panel:Note(isCircle and "The fill inside the rings." or "The fill inside the lines.")
-        SourceAndColour("bgSource", "bgColor", "bgRGB", SOURCES, shape)
+        SourceAndColour("bgSource", "bgColor", "bgRGB")
 
         panel:Case("ring1")
-        panel:Note(isCircle and "The inner ring, round the background." or "The inner line, round the background.")
+        panel:Note(isCircle and "The ring round the background." or "The line round the background.")
         panel:Checkbox{
-            label = "Show " .. ringWord:lower() .. " 1",
+            label = "Show " .. ringWord:lower(),
             get = function() return S.get("showResource") ~= false end,
             set = function(v) S.set("showResource", v); panel:Refresh() end,
         }
         Gate(function() return S.get("showResource") ~= false end)
-        SourceAndColour("ring1Source", "ring1Color", "ring1RGB", isCircle and SOURCES or EDGE_SOURCES, shape)
+        SourceAndColour("ring1Source", "ring1Color", "ring1RGB")
         if isCircle then
             panel:Slider{
                 label = "Thickness", tooltip = "As a share of the circle.",
@@ -173,40 +184,6 @@ local function Editor(panel, S)
         }
         Gate()
 
-        panel:Case("ring2")
-        panel:Note(isCircle
-            and "An extra ring outside ring 1. Off unless you turn it on."
-            or "An extra line outside line 1. Off unless you turn it on. Lines show health or the resource; "
-                .. "heals & absorbs need the circle.")
-        panel:Checkbox{
-            label = "Show " .. ringWord:lower() .. " 2",
-            get = function() return S.get("ring2On") == true end,
-            set = function(v) S.set("ring2On", v); panel:Refresh() end,
-        }
-        Gate(function() return S.get("ring2On") == true end)
-        SourceAndColour("ring2Source", "ring2Color", "ring2RGB", isCircle and SOURCES or EDGE_SOURCES, shape)
-        if isCircle then
-            panel:Slider{
-                label = "Thickness", tooltip = "As a share of the circle.",
-                min = 6, max = 24, step = 1, format = "%d%%",
-                get = function() return S.get("ring2Ring") end,
-                set = function(v) local _, t = PF().RingTexture(v); S.set("ring2Ring", t) end,
-            }
-        else
-            panel:Slider{
-                label = "Thickness", tooltip = "In pixels.", min = 1, max = 12, step = 1, format = "%d",
-                get = function() return S.get("ring2Edge") end,
-                set = function(v) S.set("ring2Edge", v) end,
-            }
-        end
-        panel:Slider{
-            label = "Gap", tooltip = "Space between it and " .. ringWord:lower() .. " 1.",
-            min = 0, max = 8, step = 1, format = "%d",
-            get = function() return S.get("ring2Gap") end,
-            set = function(v) S.set("ring2Gap", v) end,
-        }
-        Gate()
-
         panel:Case("icon")
         Icon(isCircle)
         panel:EndSwitch()
@@ -222,6 +199,7 @@ local function Editor(panel, S)
 
     panel:Case("bars")
     panel:Note("A health bar with the resource under it. Pick a part to set it up.")
+    Prediction()
     panel:Switch{
         options = {
             { value = "health", text = "Health bar" }, { value = "power", text = "Resource bar" },
@@ -294,8 +272,9 @@ function Page:Build(host, panel)
 
     
     panel:Section("Frames")
-    panel:Note("Where the frames sit and how they line up. Unlock to drag them; out of a party, samples "
-        .. "show (a tank, a healer, then damage). Click a frame to target, right-click for options.")
+    panel:Note("Where the frames sit and how they line up. Unlock to drag them and see stand-ins for "
+        .. "the party (a tank, a healer, then damage), in a party too; with yourself shown, the first "
+        .. "frame is you, live. Click a frame to target, right-click for options.")
     panel:Checkbox{
         label = "Unlocked (drag to move)",
         get = function() return Get("unlocked") == true end,

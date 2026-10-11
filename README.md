@@ -5,17 +5,18 @@ Every part is a module you switch on or off from the Modules page, so the
 parts you do not use cost nothing. It plays with a mouse and keyboard or a
 controller, and the two get the same features.
 
-- **Combat HUD:** cooldown grids anchored to your cursor, cursor rings for the
-  GCD, casts and resources, combo pips, action bars and nameplates.
-- **UI:** health and resource orbs with faction art and orb effects, target
-  and target-of-target frames, and party frames as bars, squares or circles:
-  each part shows health, the resource, or incoming heals and absorbs, with a
+- **Combat HUD:** cooldown grids anchored to your cursor, action bars and
+  nameplates.
+- **UI:** health and resource orbs with faction art, cast and GCD rings and
+  your class resource as pips; target and target-of-target frames; and party
+  frames as bars, squares or circles, with shields and incoming heals and a
   different look per role if you want one. Right-click a unit frame for its
   options. Plus dialogue and camera settings and a minimap panel.
-- **Interface:** acorns standing in for chat (with a see-through chat stream)
-  and the objective tracker, a buff window, a frame hider, world map and
-  travel map additions, gear flags and a seasonal panel (Retail).
-- **General:** profiles you can share as a string, themes for the settings
+- **Interface:** a see-through chat stream, a buff window, a frame hider
+  (with visibility rules for the objective tracker), world map additions,
+  gear flags and a seasonal panel (Retail).
+- **General:** profiles you can share as a string (separate settings for
+  mouse and controller play on WoW Forever), themes for the settings
   window (class, place and faction looks, or your own), vendor automation and
   fishing by double-click.
 - **Controller (WoW Forever):** a ThugUI wheel on Start (double tap) with

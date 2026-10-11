@@ -212,6 +212,7 @@ function AB:SetBarEnabled(key, enabled)
         return true
     end
     if not info or not info.setting then return false end
+    AB.RememberShown(key, enabled)
     if not (Settings and Settings.SetValue) then
         if ThugUI.Diagnostics then
             ThugUI.Diagnostics:Log("ACTIONBARS", "Settings.SetValue missing; cannot enable %s", key)
@@ -570,14 +571,104 @@ function AB:ApplyAll()
     end
 end
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+function AB.RememberShown(key, enabled)
+    if not ThugUIDB then return end
+    ThugUIDB.ActionBars = ThugUIDB.ActionBars or {}
+    ThugUIDB.ActionBars.shown = ThugUIDB.ActionBars.shown or {}
+    ThugUIDB.ActionBars.shown[key] = enabled and true or false
+end
+
+
+
+function AB:RestoreShown()
+    local shown = ThugUIDB.ActionBars and ThugUIDB.ActionBars.shown
+    if type(shown) ~= "table" then return 0 end
+    local n = 0
+    for _, bar in ipairs(AB.BARS) do
+        local want = shown[bar.key]
+        if bar.setting and want ~= nil then
+            local now = AB.IsBarEnabled(bar.key)
+            if now ~= nil and now ~= want then
+                self:SetBarEnabled(bar.key, want)
+                n = n + 1
+            end
+        end
+    end
+    if n > 0 and ThugUI.Diagnostics then
+        ThugUI.Diagnostics:Log("ACTIONBARS", "put back %d bar(s) the player had chosen", n)
+    end
+    return n
+end
+
+
+
+
+local watchingOptions = false
+function AB:WatchOptions()
+    if watchingOptions or not (Settings and Settings.SetOnValueChangedCallback) then return end
+    watchingOptions = true
+    for _, bar in ipairs(AB.BARS) do
+        if bar.setting then
+            pcall(Settings.SetOnValueChangedCallback, bar.setting, function(_, setting, value)
+                if SettingsPanel and SettingsPanel:IsShown() then
+                    AB.RememberShown(bar.key, value)
+                end
+            end)
+        end
+    end
+end
+
+local function Later(fn)
+    if C_Timer and C_Timer.After then C_Timer.After(0, fn) else fn() end
+end
+
+
+AB.FRESH_BARS = { "MultiBarBottomLeft", "MultiBarBottomRight", "MultiBarRight" }
+
+
+
+
+function AB:ShowFreshBars()
+    local cfg = ThugUIDB.ActionBars
+    if not (cfg and ThugUI.Profiles and ThugUI.Profiles.freshInstall) or cfg.freshBarsShown then return end
+    cfg.freshBarsShown = true
+    for _, key in ipairs(AB.FRESH_BARS) do self:SetBarEnabled(key, true) end
+end
+
 function AB:Initialize()
     local frame = CreateFrame("Frame")
 
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
     frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    ThugUI.SafeRegisterEvent(frame, "SETTINGS_LOADED")
+    ThugUI.SafeRegisterEvent(frame, "ACTIONBAR_SHOW_BOTTOMLEFT")
 
     frame:SetScript("OnEvent", function(self, event)
+        if event == "SETTINGS_LOADED" or event == "ACTIONBAR_SHOW_BOTTOMLEFT" then
+            
+            
+            Later(function()
+                AB:RestoreShown()
+                AB:WatchOptions()
+            end)
+            return
+        end
         if event == "PLAYER_ENTERING_WORLD" then
+            AB:ShowFreshBars()
+            AB:RestoreShown()
             
             
             
@@ -653,7 +744,7 @@ function AB:Initialize()
             local abOn = ThugUI:IsModuleOn("actionbars")
 
             if abOn and not inController then
-                frame:SetAlpha(V:Alpha(key))
+                frame:SetAlpha(V:CurrentAlpha(key))
             else
                 frame:SetAlpha(1)
             end

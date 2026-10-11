@@ -32,12 +32,12 @@ end
 
 Page.COMMANDS = {
     { "/thugui", "Open this window; /thugui <page id> opens that page. Also /thug and /tui." },
-    { "/acorn", "Acorns: lock, unlock, chat normal|stream|hide, obj, objcombat, font <size>, icon <chat|obj> <icon>, reset. Also /acorns." },
+    { "/thugchat", "Chat stream (mouse play): normal|stream|hide (no word cycles), lock, unlock, reset." },
     { "/thugwheel", "Open or close the controller wheel." },
-    { "/thugchat", "Open or close the controller chat window." },
+    { "/thugchat", "Controller mode: open or close the controller chat window." },
     { "/thugport", "Cast your hearthstone through the wheel's travel button." },
     { "/thugfish", "Create or update the ThugFish macro and put it on your cursor." },
-    { "/thugcv", "Cooldown grids: legacy (swap to the old ECV/BCV/GCV bars and back), import [force], rebuild, status." },
+    { "/thugcv", "Cooldown grids: import [force], rebuild, status." },
     { "/thugseason", "Open or close the Season of Thuggery window." },
 }
 

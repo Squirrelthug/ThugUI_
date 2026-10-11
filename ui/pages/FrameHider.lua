@@ -11,9 +11,9 @@ ThugUI = ThugUI or {}
 
 local Page = {}
 
+
 local function Cfg()
-    ThugUI_Config = ThugUI_Config or {}
-    return ThugUI_Config
+    return ThugUI.FrameHider and ThugUI.FrameHider.Cfg() or {}
 end
 
 local function Hider()
@@ -66,6 +66,7 @@ function Page:Build(host, panel)
             local h = Hider(); if h then h:SetCastBarHidden(v) end
         end,
     }
+    
 
 
     panel:Section("Server restart notice")
@@ -109,11 +110,58 @@ end
 
 ThugUI.Window:RegisterPage{
     id = "framehider",
+    scopeKeys = { "FrameHider" },
     category = "interface",
     order = 10,
     summary = "Turn off default elements you never look at.",
     title = "Frame Hider",
     build = function(host, panel) Page:Build(host, panel) end,
+}
+
+
+
+
+
+function Page:BuildObjectives(host, panel)
+    panel:Header("Objective tracker")
+    panel:Note("Blizzard's quest and objective tracker in mouse and keyboard play. In controller mode "
+        .. "the controller's objectives handle it.")
+    panel:FrameSection{ title = "Objective tracker" }
+    panel:SubSection("Show")
+    panel:Checkbox{
+        label = "Hide the tracker",
+        tooltip = "Gone completely until you untick this. Applies immediately.",
+        get = function() return Cfg().hideObjectiveTracker end,
+        set = function(v)
+            local h = Hider(); if h then h:SetObjectiveTrackerHidden(v) else Cfg().hideObjectiveTracker = v end
+        end,
+    }
+    if ThugUI.Visibility then
+        ThugUI.Visibility:AddControls(panel, "objectives", { split = true,
+            afterWhen = function(p)
+                p:Group("Tracker rules (these win over everything on these tabs)")
+                p:Checkbox{
+                    label = "Hide in combat in dungeons and raids",
+                    tooltip = "In instances (dungeons, raids, scenarios, battlegrounds) the tracker fades "
+                        .. "out while you fight and comes back when the fight ends.",
+                    get = function() return Cfg().trackerInstanceCombat == true end,
+                    set = function(v)
+                        local h = Hider(); if h then h:SetTrackerInstanceCombat(v) else Cfg().trackerInstanceCombat = v end
+                    end,
+                }
+            end })
+    end
+end
+
+ThugUI.Window:RegisterPage{
+    id = "objectives",
+    scopeKeys = { "FrameHider" },
+    parent = "framehider",
+    category = "interface",
+    order = 11,
+    summary = "Blizzard's objective tracker: when it shows, and hiding it.",
+    title = "Objective tracker",
+    build = function(host, panel) Page:BuildObjectives(host, panel) end,
 }
 
 return Page

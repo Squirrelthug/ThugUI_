@@ -251,7 +251,7 @@ function RP:ApplyBodyAlpha()
     if not (frame and frame.body) then return end
     local c = Cfg()
     local vis = 1
-    if not Testing() and ThugUI.Visibility then vis = ThugUI.Visibility:Alpha("resourcePipsBody") end
+    if not Testing() and ThugUI.Visibility then vis = ThugUI.Visibility:CurrentAlpha("resourcePipsBody") end
     frame.body:SetAlpha((tonumber(c.pipsAlpha) or 1) * vis)
 end
 
@@ -332,7 +332,7 @@ function RP:UpdateRing()
     if Testing() then
         r:SetAlpha(1)
     elseif ThugUI.Visibility then
-        r:SetAlpha(ThugUI.Visibility:Alpha("resourcePipsRing"))
+        r:SetAlpha(ThugUI.Visibility:CurrentAlpha("resourcePipsRing"))
     end
     r:Show()
     self:UpdateRingAlphas()
@@ -422,7 +422,7 @@ function RP:Update()
     if Testing() then
         f:SetAlpha(1)
     elseif ThugUI.Visibility then
-        f:SetAlpha(ThugUI.Visibility:Alpha("resourcePips"))
+        f:SetAlpha(ThugUI.Visibility:CurrentAlpha("resourcePips"))
     end
     self:ApplyBodyAlpha()
     f:Show()

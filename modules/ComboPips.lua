@@ -357,7 +357,15 @@ driver:RegisterEvent("PLAYER_ENTERING_WORLD")
 driver:RegisterEvent("PLAYER_REGEN_DISABLED")
 driver:RegisterEvent("PLAYER_REGEN_ENABLED")
 
-driver:SetScript("OnEvent", function(_, event)
+driver:SetScript("OnEvent", function(self, event)
+    
+    
+    
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("rings") then
+        if CP.frame then CP.frame:Hide() end
+        self:UnregisterAllEvents()
+        return
+    end
     if event == "UNIT_DISPLAYPOWER" or event == "UPDATE_SHAPESHIFT_FORM"
         or event == "PLAYER_SPECIALIZATION_CHANGED" then
         

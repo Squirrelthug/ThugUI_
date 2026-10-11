@@ -166,8 +166,10 @@ ACTIONS.UnitPopupRaidTargetButtonMixin = function(unit)
             icon = MARK_TEX .. i, checked = cur == i, macro = MarkMacro(unit, i),
         })
     end
+    
+    
     sub[#sub + 1] = Row("mark0", Text("RAID_TARGET_NONE", "None"), {
-        checked = cur == 0, macro = MarkMacro(unit, 0),
+        macro = MarkMacro(unit, 0),
     })
     return Row("raidtarget", Text("RAID_TARGET_ICON", "Target marker icon"), { sub = sub })
 end

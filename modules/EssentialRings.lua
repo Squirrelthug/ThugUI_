@@ -429,7 +429,10 @@ ER.defaults = {
 
 
 function ER:IsInCombat()
-    return InCombatLockdown() or (ThugUI_Config.testMode == true)
+    
+    
+    
+    return InCombatLockdown() or (ThugUI_Config.testMode == true and ThugUI:IsModuleOn("rings"))
 end
 
 
@@ -2344,7 +2347,12 @@ LoaderFrame:SetScript("OnEvent", function(self, event, addon)
     end
     if event == "ADDON_LOADED" and addon == "ThugUI" then
         ThugUI_DebugLog = ThugUI_DebugLog or {}
-        ER:OnInitialize()
+        
+        
+        
+        
+        
+        if ThugUI:IsModuleOn("rings") then ER:OnInitialize() end
         ER:InitializeSettings()
         
         DebugLog.enabled = ThugUI_Config.debugMode and true or false

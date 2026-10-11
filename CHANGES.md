@@ -1,5 +1,42 @@
 # ThugUI
 
+## 2.2.0
+
+- New: Chat stream replaces Acorns. Chat runs as a see-through stream of
+  text, by default on the left edge of the screen. A chat button on the
+  minimap cycles Blizzard's chat, the stream, or hidden; right-click opens
+  its settings. Your acorn chat settings carry over. `/thugchat` controls it.
+- New: the Copy window. "Copy from..." on any page with scope buttons opens
+  a window that shows where a copy comes from and where it goes.
+- New: on WoW Forever, the orbs, target and party frames, nameplates,
+  dialogue, camera, frame hider and cooldown viewer keep separate settings
+  for mouse and keyboard play and for controller play. Your current setup
+  is kept for both.
+- New: party frames show shields and incoming heals on the bar, or on a
+  square or circle whose background shows health. The second ring and
+  line and the "heals & absorbs" layer are gone; an old profile that used
+  them shows health there.
+- New: Frame hider > Objective tracker, a page of its own: hide the
+  tracker, or set when it shows (combat, targets, moving, flying, and
+  "hide in combat in dungeons and raids").
+- New: every visibility page has every rule, including "fade while
+  moving", in mouse play and on Retail too. "Show on gamepad input"
+  appears only with the Controller tile on.
+- New installs start with: action bars 1 to 4 managed (12 buttons of 42 px
+  per row), nameplates, dialogue, the minimap (top left), world map,
+  fishing, orbs, target and party frames (circles), Chat stream, frame
+  hider and automation on; camera (no situation ticked), cooldown viewer
+  and the buff window off. Existing setups keep every tile as it was.
+- Changed: Cursor rings are retired. Their features live in the orb rings
+  and the orbs.
+- Changed: party frame icon position moves in tenths, and the circle's
+  target ring can be a hairline. In test mode the first frame is you,
+  live.
+- Fixed: Blizzard's action bars you hid came back after logging out. ThugUI
+  remembers bars you hide on its page or in Options and hides them again.
+- Fixed: profile strings made in controller play lost the mouse setup.
+- Fixed: switched-off modules no longer run anything in the background.
+
 ## 2.1.1
 
 - Fixed: the right-click unit menu's protected options (Set focus, raid

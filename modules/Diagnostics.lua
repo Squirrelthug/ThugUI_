@@ -214,7 +214,7 @@ driver:SetScript("OnEvent", function(_, event)
         end
         store.events = kept
         
-        store.taint = {}
+        store.taint, store.taintLast, store.taintCounts = {}, {}, {}
         store.sessionStarted = Stamp("%Y-%m-%d %H:%M:%S")
 
         local _, class = UnitClass("player")
@@ -288,7 +288,7 @@ taintWatcher:SetScript("OnEvent", function(_, event, addonName, funcName)
             lastCrumbText = crumb.text
         end
         
-        table.insert(store.taint, {
+        local entry = {
             when = Now(),
             date = Stamp("%Y-%m-%d"),
             event = event,
@@ -296,13 +296,27 @@ taintWatcher:SetScript("OnEvent", function(_, event, addonName, funcName)
             combat = InCombatLockdown() and true or false,
             stack = debugstack(2, 12, 0),
             crumbs = crumbsCopy
-        })
+        }
         
-        while #store.taint > 20 do
-            table.remove(store.taint, 1)
+        
+        
+        
+        if #store.taint < 10 then
+            table.insert(store.taint, entry)
+        else
+            store.taintLast = store.taintLast or {}
+            table.insert(store.taintLast, entry)
+            while #store.taintLast > 10 do table.remove(store.taintLast, 1) end
         end
+
         
-        D:Log("TAINT", "%s blocked %s; last control: %s", event, funcName, lastCrumbText)
+        
+        store.taintCounts = store.taintCounts or {}
+        local key = tostring(event) .. " " .. tostring(funcName)
+        store.taintCounts[key] = (store.taintCounts[key] or 0) + 1
+        if store.taintCounts[key] == 1 then
+            D:Log("TAINT", "%s blocked %s; last control: %s (repeats counted in taintCounts)", event, funcName, lastCrumbText)
+        end
         
         if not taintPrinted then
             taintPrinted = true

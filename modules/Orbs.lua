@@ -589,10 +589,10 @@ function Orbs:ApplyAlphaRaw(key)
     
     
     local K = (key == "health") and "Health" or "Resource"
-    local visDecor = V and V:Alpha("orb" .. K .. "Decor") or 1
-    local visOrb   = V and V:Alpha("orb" .. K .. "Orb") or 1
-    local visRing  = V and V:Alpha("orb" .. K .. "Ring") or 1
-    local visArt   = V and V:Alpha("orb" .. K .. "Art") or 1
+    local visDecor = V and V:CurrentAlpha("orb" .. K .. "Decor") or 1
+    local visOrb   = V and V:CurrentAlpha("orb" .. K .. "Orb") or 1
+    local visRing  = V and V:CurrentAlpha("orb" .. K .. "Ring") or 1
+    local visArt   = V and V:CurrentAlpha("orb" .. K .. "Art") or 1
 
     local decorAlpha = (tonumber(c.decorAlpha) or 1) * visDecor
     local orbAlpha   = (tonumber(c.orbAlpha) or 1) * visOrb
@@ -617,11 +617,11 @@ function Orbs:ApplyAlphaRaw(key)
     
     
     if V and V.FlyingApplies and V:FlyingApplies(VKEY[key]) then
-        u:SetAlpha(V:Alpha(VKEY[key]))
+        u:SetAlpha(V:CurrentAlpha(VKEY[key]))
         return
     end
 
-    local vis = V and V:Alpha(VKEY[key]) or 1
+    local vis = V and V:CurrentAlpha(VKEY[key]) or 1
     local override = V and V:IsOverrideShown(VKEY[key]) or false
 
     local unitAlpha = vis

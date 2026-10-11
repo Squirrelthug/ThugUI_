@@ -748,6 +748,7 @@ local BAR_EVENTS = {
 }
 
 local driver = CreateFrame("Frame")
+CT.driver = driver  
 driver.timeSince = 0
 
 driver:SetScript("OnEvent", function(self, event, unit)
@@ -783,6 +784,9 @@ end)
 
 
 driver:SetScript("OnUpdate", function(self, elapsed)
+    
+    
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("targetframes") then self:SetScript("OnUpdate", nil) return end
     if frames["tot"] and frames["tot"]:IsShown() and CT:IsActive() and Cfg().tot.enabled then
         self.timeSince = self.timeSince + elapsed
         if self.timeSince > 0.2 then

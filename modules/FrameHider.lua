@@ -15,6 +15,15 @@ FrameHider.applied = {}
 
 
 
+local function Cfg()
+    ThugUIDB.FrameHider = ThugUIDB.FrameHider or {}
+    return ThugUIDB.FrameHider
+end
+FrameHider.Cfg = Cfg
+
+
+
+
 
 
 
@@ -63,6 +72,145 @@ FrameHider.HideSecurely = HideSecurely
 
 
 
+
+
+
+
+
+
+
+
+
+
+local trackerHolder
+local trackerWatch
+local TRACKER_LADDER = { 0.1, 0.5, 1, 2, 5 }
+
+local function Tracker()
+    return _G.ObjectiveTrackerFrame
+end
+
+local function TrackerHolder()
+    if not trackerHolder then
+        trackerHolder = CreateFrame("Frame", "ThugUI_FrameHiderHolder", UIParent)
+        trackerHolder:Hide()
+    end
+    return trackerHolder
+end
+
+function FrameHider:OwnsObjectiveTracker()
+    if ThugUI.controllerAtLoad then return false end
+    return true
+end
+
+local function TrackerWantHidden()
+    return Cfg().hideObjectiveTracker == true and FrameHider:OwnsObjectiveTracker()
+end
+
+
+
+
+local function ReassertTracker()
+    if not TrackerWantHidden() then return end
+    local t = Tracker()
+    if not t or t:GetParent() == TrackerHolder() then return end
+    if InCombatLockdown() then return end
+    t:SetParent(TrackerHolder())
+end
+FrameHider.ReassertTracker = ReassertTracker
+
+local function ScheduleTrackerReassert()
+    ReassertTracker()
+    if not (C_Timer and C_Timer.After) then return end
+    for _, delay in ipairs(TRACKER_LADDER) do C_Timer.After(delay, ReassertTracker) end
+end
+
+local function EnsureTrackerWatch()
+    if trackerWatch then return end
+    trackerWatch = CreateFrame("Frame")
+    trackerWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+    trackerWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
+    trackerWatch:SetScript("OnEvent", ScheduleTrackerReassert)
+    
+    
+    if EventRegistry and EventRegistry.RegisterCallback then
+        EventRegistry:RegisterCallback("EditMode.Exit", function()
+            if C_Timer and C_Timer.After then C_Timer.After(0, ScheduleTrackerReassert)
+            else ScheduleTrackerReassert() end
+        end, FrameHider)
+    end
+end
+
+
+
+
+function FrameHider:MigrateTrackerFromAcorns()
+    if Cfg().hideObjectiveTracker ~= nil then return end
+    local o = ThugUIDB and ThugUIDB.Acorns and ThugUIDB.Acorns.objectives
+    if o and o.visible == false then Cfg().hideObjectiveTracker = true end
+end
+
+
+
+
+
+
+
+
+
+
+local trackerAlphaSet = false
+
+function FrameHider:TrackerAlpha(alpha)
+    local V = ThugUI.Visibility
+    if Cfg().trackerInstanceCombat and V and V:InCombat()
+        and type(IsInInstance) == "function" and IsInInstance() then
+        return 0
+    end
+    return alpha or 1
+end
+
+function FrameHider:ApplyTrackerVisibility(alpha)
+    if not self:OwnsObjectiveTracker() then return end
+    local t = Tracker()
+    if not t or not t.SetAlpha then return end
+    local V = ThugUI.Visibility
+    local default = (not V or V:IsDefault("objectives")) and not Cfg().trackerInstanceCombat
+    if default then
+        if trackerAlphaSet then t:SetAlpha(1); trackerAlphaSet = false end
+        return
+    end
+    if alpha == nil then alpha = V and V:CurrentAlpha("objectives") or 1 end
+    t:SetAlpha(self:TrackerAlpha(alpha))
+    trackerAlphaSet = true
+end
+
+function FrameHider:SetTrackerInstanceCombat(on)
+    Cfg().trackerInstanceCombat = on and true or false
+    self:ApplyTrackerVisibility()
+end
+
+
+function FrameHider:MigrateTrackerCombatFromAcorns()
+    if Cfg().trackerInstanceCombat ~= nil then return end
+    local o = ThugUIDB and ThugUIDB.Acorns and ThugUIDB.Acorns.objectives
+    if o and o.hideInCombat == true then Cfg().trackerInstanceCombat = true end
+end
+
+
+function FrameHider:SetObjectiveTrackerHidden(hidden)
+    Cfg().hideObjectiveTracker = hidden and true or false
+    if not self:OwnsObjectiveTracker() then return end
+    local t = Tracker()
+    if not t then return end
+    if hidden then
+        EnsureTrackerWatch()
+        ScheduleTrackerReassert()
+    elseif t:GetParent() == trackerHolder and not InCombatLockdown() then
+        t:SetParent(UIParent)
+        t:Show()
+    end
+end
 
 
 function FrameHider:HideStanceBar()
@@ -127,7 +275,7 @@ end
 
 
 function FrameHider:SetCastBarHidden(hidden)
-    ThugUI_Config.hideCastBar = hidden
+    Cfg().hideCastBar = hidden
     self:RefreshCastBar()
 end
 
@@ -139,7 +287,7 @@ function FrameHider:WantCastBar()
     
     
     
-    local show = not (ThugUI:IsModuleOn("framehider") and ThugUI_Config.hideCastBar)
+    local show = not (ThugUI:IsModuleOn("framehider") and Cfg().hideCastBar)
     if show and ThugUI.Visibility then
         show = ThugUI.Visibility:Alpha("castBar") > 0
     end
@@ -255,7 +403,7 @@ function FrameHider:GetShardMover()
         m:StopMovingOrSizing()
         local left, top = m:GetLeft(), m:GetTop()
         if left and top then
-            ThugUI_Config.shardNoticePoint = { x = left, y = top - UIParent:GetHeight() }
+            Cfg().shardNoticePoint = { x = left, y = top - UIParent:GetHeight() }
         end
         FrameHider:PlaceShardNotice()
     end)
@@ -270,7 +418,7 @@ end
 
 local function PositionMover(mover)
     mover:ClearAllPoints()
-    local saved = ThugUI_Config.shardNoticePoint
+    local saved = Cfg().shardNoticePoint
     if saved and saved.x and saved.y then
         mover:SetPoint("TOPLEFT", UIParent, "TOPLEFT", saved.x, saved.y)
         return
@@ -287,7 +435,7 @@ end
 function FrameHider:PlaceShardNotice()
     local frame = ShardFrames()
     if not frame then return end
-    local saved = ThugUI_Config.shardNoticePoint
+    local saved = Cfg().shardNoticePoint
     if not (saved and saved.x and saved.y) then return end
     local mover = self:GetShardMover()
     PositionMover(mover)
@@ -306,7 +454,7 @@ function FrameHider:SetShardNoticeUnlocked(unlocked)
 end
 
 function FrameHider:ResetShardNoticePosition()
-    ThugUI_Config.shardNoticePoint = nil
+    Cfg().shardNoticePoint = nil
     if self.shardMover and self.shardMover:IsShown() then
         PositionMover(self.shardMover)
     end
@@ -321,7 +469,7 @@ function FrameHider:ApplyShardNotice()
     if not self.applied.shardHooks then
         self.applied.shardHooks = true
         frame:HookScript("OnShow", function(f)
-            if ThugUI_Config.hideShardNotice then
+            if Cfg().hideShardNotice then
                 f:Hide()
             else
                 FrameHider:PlaceShardNotice()
@@ -329,12 +477,12 @@ function FrameHider:ApplyShardNotice()
         end)
         if minimize then
             minimize:HookScript("OnShow", function(m)
-                if ThugUI_Config.hideShardNotice then m:Hide() end
+                if Cfg().hideShardNotice then m:Hide() end
             end)
         end
     end
 
-    if ThugUI_Config.hideShardNotice then
+    if Cfg().hideShardNotice then
         frame:Hide()
         if minimize then minimize:Hide() end
     else
@@ -347,18 +495,30 @@ end
 
 
 function FrameHider:ApplyAll()
-    if ThugUI_Config.hideStanceBar then
+    if Cfg().hideStanceBar then
         self:HideStanceBar()
     end
-    if ThugUI_Config.hideBagButtons then
+    if Cfg().hideBagButtons then
         self:HideBagButtons()
     end
-    if ThugUI_Config.hideCharacterFrame then
+    if Cfg().hideCharacterFrame then
         self:HideCharacterFrame()
     end
-    if ThugUI_Config.hideCastBar then
+    if Cfg().hideCastBar then
         self:SetCastBarHidden(true)
     end
+    self:MigrateTrackerFromAcorns()
+    self:MigrateTrackerCombatFromAcorns()
+    if Cfg().hideObjectiveTracker then
+        self:SetObjectiveTrackerHidden(true)
+    end
+    
+    
+    if ThugUI.Visibility and not self.trackerRegistered then
+        self.trackerRegistered = true
+        ThugUI.Visibility:Register("objectives", function(alpha) FrameHider:ApplyTrackerVisibility(alpha) end)
+    end
+    self:ApplyTrackerVisibility()
     self:ApplyShardNotice()
 
     

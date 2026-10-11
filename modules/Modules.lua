@@ -22,7 +22,7 @@ ThugUI.ModuleRegistry = {
       
       
       
-      conflicts = { "actionbars","rings","minimapmouse","acorns" },
+      conflicts = { "actionbars","minimapmouse","chatstream" },
       category = "controller", defaultOff = true,
       
       
@@ -40,17 +40,22 @@ ThugUI.ModuleRegistry = {
       category = "controller", defaultOff = true,
       clients = { forever = true } },
     { id = "cooldowns",  title = "Cooldown viewer", icon = "Interface\\Icons\\Spell_Nature_TimeStop",
-      desc = "Per-spec cooldown grids on the cursor.", modules = {}, pages = { "cooldownviewer" }, category = "combat" },
+      desc = "Per-spec cooldown grids on the cursor.", modules = {}, pages = { "cooldownviewer" }, category = "combat", defaultOff = true },
     { id = "rings",      title = "Cursor rings",   icon = "Interface\\Icons\\Spell_Holy_MagicalSentry",
-      desc = "GCD, cast, resource ring and combo pips around the cursor.", modules = {}, pages = { "cursorrings" }, category = "combat" },
+      desc = "GCD, cast, resource ring and combo pips around the cursor.", modules = {}, pages = { "cursorrings" }, category = "combat",
+      
+      
+      
+      
+      retired = true },
     { id = "actionbars", title = "Action bars", icon = "Interface\\Icons\\INV_Misc_Book_09",
-      desc = "Blizzard's bars in your rows and columns.", modules = { "ActionBars" }, pages = { "actionbars", "actionbars_xp", "actionbars_micro", "actionbars_bags" }, category = "combat", defaultOff = true },
+      desc = "Blizzard's bars in your rows and columns.", modules = { "ActionBars" }, pages = { "actionbars", "actionbars_xp", "actionbars_micro", "actionbars_bags" }, category = "combat" },
     { id = "nameplates", title = "Nameplates", icon = "Interface\\Icons\\INV_Misc_Note_01",
-      desc = "Name-only plates out of combat.", modules = { "Nameplates" }, pages = { "nameplates" }, category = "combat", defaultOff = true },
+      desc = "Name-only plates out of combat.", modules = { "Nameplates" }, pages = { "nameplates" }, category = "combat" },
     { id = "camera",     title = "Camera", icon = "Interface\\Icons\\INV_Misc_Spyglass_03",
       desc = "Action Cam and camera situations.", modules = { "Camera" }, pages = { "camera" }, category = "ui", defaultOff = true },
     { id = "dialogue",   title = "Dialogue", icon = "Interface\\Icons\\INV_Scroll_03",
-      desc = "Quest and gossip text one paragraph at a time.", modules = { "Dialogue" }, pages = { "dialogue" }, category = "ui", defaultOff = true },
+      desc = "Quest and gossip text one paragraph at a time.", modules = { "Dialogue" }, pages = { "dialogue" }, category = "ui" },
     { id = "orbs", title = "Orbs", icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom",
       desc = "Diablo style health and resource orbs, with the resource pips.",
       modules = { "Orbs", "ResourcePips" }, pages = { "orbs" }, category = "ui" },
@@ -65,18 +70,21 @@ ThugUI.ModuleRegistry = {
       modules = { "PartyFrames" }, pages = { "partyframes" }, category = "ui" },
     { id = "minimapmouse", title = "Minimap", icon = "Interface\\Icons\\INV_Misc_Map_01",
       desc = "The ThugUI minimap panel for mouse play, with its own settings.",
-      modules = {}, pages = { "minimapmouse" }, category = "interface", defaultOff = true },
+      modules = {}, pages = { "minimapmouse" }, category = "interface" },
     { id = "orbeffects", title = "Orb effects", icon = "Interface\\Icons\\Spell_Nature_WispSplode",
       desc = "Animated effects in the orbs and pips. Costs frame rate.", modules = { "OrbEffects" },
       pages = {}, defaultOff = true, soon = true, category = "ui" },
-    { id = "acorns",     title = "Acorns", icon = "Interface\\AddOns\\ThugUI\\media\\Acorn",
-      desc = "Acorns standing in for hidden chat and tracker.", modules = { "Acorns" }, pages = { "acorns", "acorns_chat", "acorns_objectives" }, category = "interface" },
+    
+    
+    { id = "chatstream", title = "Chat stream", icon = "Interface\\AddOns\\ThugUI\\media\\Acorn",
+      desc = "Chat as a clear stream, Blizzard's chat or hidden: one click on its minimap icon.",
+      modules = { "ChatStream" }, pages = { "chatstream" }, category = "interface" },
     { id = "framehider", title = "Frame hider", icon = "Interface\\Icons\\Spell_Nature_Invisibilty",
-      desc = "Turn off Blizzard frames you never look at.", modules = {}, pages = { "framehider" }, category = "interface" },
+      desc = "Turn off Blizzard frames you never look at.", modules = {}, pages = { "framehider", "objectives" }, category = "interface" },
     { id = "automation", title = "Automation", icon = "Interface\\Icons\\INV_Misc_Coin_01",
       desc = "Sell junk and repair at vendors.", modules = { "Automation" }, pages = { "automation" }, category = "general" },
     { id = "fishing",    title = "Fishing", icon = "Interface\\Icons\\INV_Fishingpole_02",
-      desc = "The ThugFish macro and fishing sound.", modules = { "Fishing" }, pages = { "fishing" }, category = "general", defaultOff = true },
+      desc = "The ThugFish macro and fishing sound.", modules = { "Fishing" }, pages = { "fishing" }, category = "general" },
     
     
     
@@ -89,7 +97,7 @@ ThugUI.ModuleRegistry = {
       desc = "Flags equipped slots missing an enchant or gem, and marks set pieces.",
       modules = { "GearFlags" }, pages = { "gearflags" }, clients = { retail = true }, category = "interface" },
     { id = "worldmap",   title = "World map", icon = "Interface\\Icons\\INV_Misc_Map_01",
-      desc = "Zone labels on the world map.", modules = { "WorldMapLabels" }, pages = { "worldmap" }, category = "interface", defaultOff = true },
+      desc = "Zone labels on the world map.", modules = { "WorldMapLabels" }, pages = { "worldmap" }, category = "interface" },
     { id = "slimmap",   title = "Travel map", icon = "Interface\\Icons\\INV_Misc_Map02",
       desc = "A borderless travel map with slim art: nothing past the coastlines.", modules = { "WorldMapStrip" }, pages = {}, soon = true, category = "interface" },
 }
@@ -121,7 +129,7 @@ function M:Visible()
     local list = {}
     for i = 1, #ThugUI.ModuleRegistry do
         local entry = ThugUI.ModuleRegistry[i]
-        if M:ForClient(entry) then list[#list + 1] = entry end
+        if M:ForClient(entry) and not entry.retired then list[#list + 1] = entry end
     end
     return list
 end
@@ -131,7 +139,7 @@ function M:Stored(id)
     if entry and not M:ForClient(entry) then
         return false
     end
-    if entry and entry.soon then
+    if entry and (entry.soon or entry.retired) then
         return false
     end
     if entry and entry.locked then
@@ -153,18 +161,49 @@ end
 
 
 
-M.DEFAULTS_VERSION = 2
+
+
+
+
+
+M.DEFAULTS_VERSION = 3
 M.ON_BEFORE_V2 = { "controller", "actionbars", "nameplates", "camera", "dialogue",
                    "minimapmouse", "worldmap", "fishing" }
+M.BEFORE_V3 = { actionbars = false, nameplates = false, dialogue = false, minimapmouse = false,
+                worldmap = false, fishing = false, cooldowns = true }
 function M:PinOldDefaults()
-    if not ThugUIDB or (ThugUIDB.ModulesDefaults or 1) >= M.DEFAULTS_VERSION then return end
+    if not ThugUIDB then return end
+    local version = ThugUIDB.ModulesDefaults or 1
+    if version >= M.DEFAULTS_VERSION then return end
     if not (ThugUI.Profiles and ThugUI.Profiles.freshInstall) then
         ThugUIDB.Modules = ThugUIDB.Modules or {}
-        for _, id in ipairs(M.ON_BEFORE_V2) do
-            if ThugUIDB.Modules[id] == nil then ThugUIDB.Modules[id] = true end
+        local stored = ThugUIDB.Modules
+        if version < 2 then
+            for _, id in ipairs(M.ON_BEFORE_V2) do
+                if stored[id] == nil then stored[id] = true end
+            end
+        end
+        for id, old in pairs(M.BEFORE_V3) do
+            if stored[id] == nil then stored[id] = old end
         end
     end
-    ThugUIDB.ModulesDefaults = M.DEFAULTS_VERSION
+    
+    
+    if ThugUI.Profiles and ThugUI.Profiles.WriteTop then
+        ThugUI.Profiles:WriteTop("ModulesDefaults", M.DEFAULTS_VERSION)
+    else
+        ThugUIDB.ModulesDefaults = M.DEFAULTS_VERSION
+    end
+end
+
+
+
+
+function M:MigrateChatTile()
+    if not ThugUIDB or not ThugUIDB.Modules then return end
+    if ThugUIDB.Modules.acorns ~= nil and ThugUIDB.Modules.chatstream == nil then
+        ThugUIDB.Modules.chatstream = ThugUIDB.Modules.acorns
+    end
 end
 
 
@@ -204,6 +243,7 @@ function M:Snapshot()
 
     M:PinOldDefaults()
     M:MigrateAuraTile()
+    M:MigrateChatTile()
 
     ThugUI.moduleOn = {}
     ThugUI.moduleBase = {}
@@ -280,7 +320,7 @@ end
 
 function M:Set(id, on)
     local entry = M:Entry(id)
-    if not entry or entry.locked or entry.soon or not M:ForClient(entry) then
+    if not entry or entry.locked or entry.soon or entry.retired or not M:ForClient(entry) then
         return false
     end
     ThugUIDB.Modules = ThugUIDB.Modules or {}

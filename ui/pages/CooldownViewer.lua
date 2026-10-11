@@ -988,6 +988,7 @@ end
 
 ThugUI.Window:RegisterPage{
     id = "cooldownviewer",
+    scopeKeys = { "CooldownViewer" },
     category = "combat",
     order = 10,
     summary = "Per-spec grids of must-press cooldowns that ride your cursor.",
