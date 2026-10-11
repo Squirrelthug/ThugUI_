@@ -521,6 +521,8 @@ end
 
 
 
+
+
 local function Flag(fn)
     if not fn then return false end
     local ok, v = pcall(fn, "player")
@@ -529,7 +531,7 @@ local function Flag(fn)
 end
 
 local function Suppressed()
-    return Flag(UnitIsDeadOrGhost) or Flag(UnitOnTaxi)
+    return Flag(UnitIsDeadOrGhost)
 end
 Orbs.Suppressed = Suppressed
 
@@ -610,6 +612,12 @@ function Orbs:ApplyAlphaRaw(key)
 
     if Suppressed() then
         u:SetAlpha(0)
+        return
+    end
+    
+    
+    if V and V.FlyingApplies and V:FlyingApplies(VKEY[key]) then
+        u:SetAlpha(V:Alpha(VKEY[key]))
         return
     end
 

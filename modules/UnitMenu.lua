@@ -148,19 +148,26 @@ end
 
 local MARK_TEX = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
 
+
+
+
+
+local function MarkMacro(unit, i)
+    return (_G.SLASH_TARGET_MARKER1 or "/tm") .. " [@" .. unit .. "] " .. i
+end
+UM.MarkMacro = MarkMacro
+
 ACTIONS.UnitPopupRaidTargetButtonMixin = function(unit)
     local cur = Ask(GetRaidTargetIndex, unit) or 0
     local sub = {}
     
     for i = 8, 1, -1 do
         sub[#sub + 1] = Row("mark" .. i, Text("RAID_TARGET_" .. i, "Mark " .. i), {
-            icon = MARK_TEX .. i, checked = cur == i,
-            run = function() Try("SetRaidTarget", SetRaidTarget, unit, i) end,
+            icon = MARK_TEX .. i, checked = cur == i, macro = MarkMacro(unit, i),
         })
     end
     sub[#sub + 1] = Row("mark0", Text("RAID_TARGET_NONE", "None"), {
-        checked = cur == 0,
-        run = function() Try("SetRaidTarget", SetRaidTarget, unit, 0) end,
+        checked = cur == 0, macro = MarkMacro(unit, 0),
     })
     return Row("raidtarget", Text("RAID_TARGET_ICON", "Target marker icon"), { sub = sub })
 end

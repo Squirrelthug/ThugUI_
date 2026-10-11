@@ -87,11 +87,24 @@ local function Macro(i)
     if macros[i] then return macros[i] end
     if Combat() then return nil end
     local m = CreateFrame("Button", "ThugUI_UnitMenuMacro" .. i, UIParent, "SecureActionButtonTemplate")
-    m:SetFrameStrata("FULLSCREEN_DIALOG")
-    m:RegisterForClicks("AnyUp")
+    
+    
+    
+    
+    
+    m:SetFrameStrata("TOOLTIP")
+    
+    
+    
+    
+    
+    m:RegisterForClicks("AnyDown", "AnyUp")
     m:SetAttribute("type1", "macro")
     m:SetAttribute("macrotext1", "")
-    m:HookScript("PostClick", function()
+    m:HookScript("PostClick", function(_, _, down)
+        
+        
+        if down then return end
         Log("macro row clicked")
         if C_Timer and C_Timer.After then C_Timer.After(0, function() W:Close() end) else W:Close() end
     end)
@@ -346,10 +359,20 @@ function W:Click(b)
     end
 end
 
-local function Over(f) return f and f:IsShown() and MouseIsOver and MouseIsOver(f) end
+
+
+
+
+
+local function Over(f)
+    if not (f and f:IsShown() and f.IsMouseOver) then return false end
+    local ok, over = pcall(f.IsMouseOver, f)
+    return ok and over == true
+end
 
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
-events:SetScript("OnEvent", function(_, event)
+
+function W.EventHandler(_, event)
     if event == "PLAYER_REGEN_ENABLED" then
         if W.pendingRelease and not W:IsOpen() then ReleaseMacros() end
     elseif event == "GLOBAL_MOUSE_DOWN" then
@@ -368,7 +391,8 @@ events:SetScript("OnEvent", function(_, event)
             W:Close()
         end
     end
-end)
+end
+events:SetScript("OnEvent", W.EventHandler)
 
 if ThugUI.CombatClose then
     ThugUI.CombatClose:Register("unitmenu", function() return W:IsOpen() end,

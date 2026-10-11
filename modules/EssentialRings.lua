@@ -1942,9 +1942,10 @@ function ER:GCDCastHandler(self, event, unit, spellName, spellId)
     
     if unit and unit ~= "player" then return end
 
+    
+    
+    
     if GetTime() - ER.lastGCDTime < 0.1 then return end
-
-    ER.lastGCDTime = GetTime()
 
     
     
@@ -1953,6 +1954,7 @@ function ER:GCDCastHandler(self, event, unit, spellName, spellId)
     if not CTm then return end
     local running, start, duration, obj = CTm:ReadGCD()
     if running then
+        ER.lastGCDTime = GetTime()
         ER:StartGCDAnimation(start, duration, obj)
     end
 end

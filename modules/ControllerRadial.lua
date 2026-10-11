@@ -185,9 +185,15 @@ local GROUP = {
             label = "Clear mark",
             isEnabled = Safe(function() return UnitExists("target") end),
             disabledMsg = "You have no target.",
+            
+            
+            stayOpen = true,
             action = function()
-                local ok, err = pcall(SetRaidTarget, "target", 0)
-                if not ok then Log("GROUP: SetRaidTarget refused: %s", tostring(err)) end
+                ControllerRadial:EnterSub("marks")
+                if ControllerRadial.pages and ControllerRadial.pages[2] then
+                    ControllerRadial.pageIndex = 2
+                    ControllerRadial:Draw()
+                end
             end,
         },
         [5] = {
@@ -738,6 +744,27 @@ local function UnitPages(rows, header)
                 pages[n] = page
             end
             page.buttons[#page.buttons + 1] = UnitEntry(row)
+            
+            
+            
+            local none
+            for _, r in ipairs(row.key == "raidtarget" and row.sub or {}) do
+                if r.key == "mark0" then none = r end
+            end
+            if none then
+                local rm = {}
+                for k, v in pairs(none) do rm[k] = v end
+                rm.key, rm.text, rm.checked = "removemark", "Remove mark", nil
+                rm.icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
+                if none.checked then rm.enabled, rm.reason = false, "No mark to remove." end
+                if #page.buttons == SEGMENTS then
+                    local n = #pages + 1
+                    page = { header = header .. " " .. n, buttons = {},
+                        hint = function() return ("Point, then press %s"):format(ButtonGlyph(PAD_CONFIRM)) end }
+                    pages[n] = page
+                end
+                page.buttons[#page.buttons + 1] = UnitEntry(rm)
+            end
         end
     end
     if #pages == 0 then pages[1] = { header = header, buttons = {}, empty = "Nothing to do with this unit." } end
@@ -750,6 +777,7 @@ function ControllerRadial:BuildPages()
     local pages = { GROUP }
     if self:ShowsPartyPage() then table.insert(pages, self:PartyPage()) end
     table.insert(pages, self:UtilityPage())
+    self.utilityIndex = #pages
     if ThugUI:IsModuleOn("prep") and ThugUI.Prep then
         table.insert(pages, self:PrepPage())
     end
@@ -770,7 +798,7 @@ end
 
 
 local function IsCastSub(sub)
-    return sub == "travel" or sub == "markers" or IsPrepSub(sub) or UNIT_SUBS[sub] == true
+    return sub == "travel" or sub == "markers" or sub == "marks" or IsPrepSub(sub) or UNIT_SUBS[sub] == true
 end
 
 local function ResetSubDial(self)
@@ -838,21 +866,36 @@ end
 function ControllerRadial:RebuildSubPages()
     local pages = {}
     if self.sub == "marks" then
-        local page = { header = "Marks", buttons = {} }
+        
+        
+        
+        
+        
+        local function TargetThere() return UnitExists("target") end
+        local MM = ThugUI.UnitMenu and ThugUI.UnitMenu.MarkMacro
+        local function Mark(k) return MM and MM("target", k) or ("/tm " .. k) end
+        local page = { header = "Marks", buttons = {}, hint = TravelHint }
         for k = 1, 8 do
+            local name = _G["RAID_TARGET_" .. k] or ("Mark " .. k)
             page.buttons[k] = {
-                label = _G["RAID_TARGET_" .. k] or ("Mark " .. k),
+                label = name,
                 icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. k,
-                isEnabled = Safe(function() return UnitExists("target") end),
+                isEnabled = Safe(TargetThere),
                 isActive = function() return PlainMark() == k end,
-                action = function()
-                    local cur = PlainMark()
-                    local ok, err = pcall(SetRaidTarget, "target", cur == k and 0 or k)
-                    if not ok then Log("GROUP: SetRaidTarget refused: %s", tostring(err)) end
-                end,
+                action = MarkerFallback,
+                travelEntry = { kind = "macro", text = Mark(k), name = name },
             }
         end
         table.insert(pages, page)
+        local clear = { header = "Clear mark", buttons = {}, hint = TravelHint }
+        clear.buttons[1] = {
+            label = _G.RAID_TARGET_NONE or "None",
+            icon = "Interface\\Buttons\\UI-GroupLoot-Pass-Up",
+            isEnabled = Safe(function() return TargetThere() and (PlainMark() or 0) ~= 0 end),
+            action = MarkerFallback,
+            travelEntry = { kind = "macro", text = Mark(0), name = "Clear mark" },
+        }
+        table.insert(pages, clear)
     elseif self.sub == "raid" then
         local page = { header = "Raid", buttons = {} }
         page.buttons[1] = {
@@ -1382,6 +1425,7 @@ function ControllerRadial:Stick(x, y)
             
             
             
+            
             local aimOnly = IsCastSub(self.sub)
             if not aimOnly then
                 self:Pick(self.selected)
@@ -1894,7 +1938,9 @@ function ControllerRadial:Open()
     end
     ResetSubDial(self)
     self:BuildPages()
-    self.pageIndex = self.pageIndex and math.min(self.pageIndex, #self.pages) or 1
+    
+    
+    self.pageIndex = self.utilityIndex or 1
     self.selected, self.stickSelected = nil, false
     self:Draw()
     frame:Show()

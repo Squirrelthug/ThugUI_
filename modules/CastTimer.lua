@@ -25,6 +25,7 @@
 
 
 
+
 local ThugUI = _G.ThugUI
 local CT = {}
 ThugUI.CastTimer = CT
@@ -64,14 +65,46 @@ end
 
 
 
+
+
+
+
+local lastSpellID
+
+local function GCDSpell()
+    
+    if not (C_Spell and C_Spell.GetSpellInfo) then return GCD_SPELL_ID, false end
+    local ok, known = pcall(C_Spell.GetSpellInfo, GCD_SPELL_ID)
+    if not ok or known then return GCD_SPELL_ID, false end
+    if lastSpellID then return lastSpellID, true end
+    return GCD_SPELL_ID, false
+end
+
+
+
+
 function CT:ReadGCD()
+    local spellID, fromCast = GCDSpell()
     local obj
     if C_Spell and C_Spell.GetSpellCooldownDuration then
-        local ok, o = pcall(C_Spell.GetSpellCooldownDuration, GCD_SPELL_ID)
+        local ok, o = pcall(C_Spell.GetSpellCooldownDuration, spellID)
         if ok then obj = o end
     end
     local running, start, duration = nil, nil, nil
-    local ok, info = pcall(C_Spell.GetSpellCooldown, GCD_SPELL_ID)
+    local ok, info = pcall(C_Spell.GetSpellCooldown, spellID)
+    if ok and type(info) == "table" and fromCast then
+        
+        
+        
+        local onGCD = PlainBool(info.isOnGCD)
+        start, duration = Plain(info.startTime), Plain(info.duration)
+        if onGCD == nil and start and duration then
+            onGCD = duration > 0 and duration <= 1.5
+        end
+        running = onGCD == true
+        if not running then start, duration, obj = nil, nil, nil end
+        return running, start, duration, obj
+    end
     if ok and type(info) == "table" then
         start, duration = Plain(info.startTime), Plain(info.duration)
         if start and duration then
@@ -89,13 +122,25 @@ function CT:ReadGCD()
     return running, start, duration, obj
 end
 
+
+
+
+
+
 function CT:OnGCD()
     local now = GetTime()
     if now - lastGCD < 0.1 then return end
-    lastGCD = now
     local running, start, duration, obj = self:ReadGCD()
+    if ThugUI.Diagnostics and ThugUI.Diagnostics.LogOnce then
+        local spellID, fromCast = GCDSpell()
+        ThugUI.Diagnostics:LogOnce("casttimer-gcd-" .. tostring(running) .. "-" .. tostring(start ~= nil) .. "-" .. tostring(obj ~= nil) .. "-" .. tostring(fromCast),
+            "CASTTIMER", "GCD read: running=%s plain=%s obj=%s combat=%s spell=%s fromCast=%s",
+            tostring(running), tostring(start ~= nil), tostring(obj ~= nil), tostring(InCombatLockdown()),
+            tostring(spellID), tostring(fromCast))
+    end
     if not running then return end
     if not obj and not (start and duration) then return end
+    lastGCD = now
     CT.gcd = { start = start, duration = duration, obj = obj }
     Notify("gcd", start, duration, false, obj)
 end
@@ -135,10 +180,23 @@ local CAST_EVENTS = {
 }
 
 CT.driver = CreateFrame("Frame")
-CT.driver:SetScript("OnEvent", function(_, event, unit)
+
+
+
+CT.sentWatch = CreateFrame("Frame")
+CT.sentWatch:SetScript("OnEvent", function(_, _, unit, _, _, spellID)
+    if unit and unit ~= "player" then return end
+    lastSpellID = Plain(spellID) or lastSpellID
+end)
+pcall(CT.sentWatch.RegisterUnitEvent, CT.sentWatch, "UNIT_SPELLCAST_SENT", "player")
+
+CT.driver:SetScript("OnEvent", function(_, event, unit, _, _, spellID)
     
     
     if unit and unit ~= "player" then return end
+    
+    
+    if event == "UNIT_SPELLCAST_SENT" then lastSpellID = Plain(spellID) or lastSpellID end
     
     
     if event == "UNIT_SPELLCAST_SENT" or event == "SPELL_UPDATE_COOLDOWN" then

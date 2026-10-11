@@ -1,5 +1,21 @@
 # ThugUI
 
+## 2.1.1
+
+- Fixed: the right-click unit menu's protected options (Set focus, raid
+  marks and the rest) did nothing when clicked.
+- Fixed: raid marks from the unit menu and the controller wheel were
+  refused by the game; they now use Blizzard's /tm. The wheel gets a Clear
+  mark page and a Remove mark slice beside the marks.
+- Fixed: on WoW Forever the global cooldown never swept the cursor GCD
+  ring or an orb ring set to Global cooldown, in or out of combat.
+- Back: the map on the controller shortcuts' bottom face button (hold the
+  shortcut modifiers, press the bottom face button), out of combat.
+- New: "Fade while flying" on every visibility page (a flight path, or a
+  flying mount in the air). On by default for the orbs, which already hid on
+  flight paths; off for everything else.
+- Changed: the controller wheel always opens on Utility.
+
 ## 2.1.0
 
 - New: party frames in place of Blizzard's, as bars, squares or circles.

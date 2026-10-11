@@ -11,6 +11,19 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 local ThugUI = _G.ThugUI
 local CS = {}
 ThugUI.ControllerShortcuts = CS
@@ -18,143 +31,134 @@ ThugUI:RegisterModule("ControllerShortcuts", CS)
 
 local FADE_OPACITY = 0.3 
 local MAP_ICON = "Interface\\Icons\\INV_Misc_Map02"
+local MAP_BINDING = "TOGGLEWORLDMAP"
 
-local hookedShortcuts = {}
+local function Log(fmt, ...)
+    if ThugUI.Diagnostics then ThugUI.Diagnostics:Log("SHORTCUTS", fmt, ...) end
+end
+
+local function Combat() return InCombatLockdown and InCombatLockdown() or false end
+
+local function Uses()
+    return ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("mapShortcut") or false
+end
+
+local function Key() return _G.GAMEPAD_FACE_BOTTOM or "PAD1" end
 
 
-local pendingCombat = nil
+CS.owner = CreateFrame("Frame", "ThugUI_MapShortcutOwner")
+CS.bound = false
+
+
+function CS:Bind(on)
+    if on then
+        if CS.bound or Combat() then return end
+        local ok, err = pcall(SetOverrideBinding, CS.owner, true, Key(), MAP_BINDING)
+        if not ok then Log("bind refused: %s", tostring(err)) return end
+        CS.bound = true
+        local okA, action = pcall(GetBindingAction, Key(), true)
+        Log("map bound; %s -> %s", Key(), okA and tostring(action) or "?")
+    else
+        if not CS.bound then return end
+        if Combat() then
+            
+            
+            CS.clearPending = true
+            return
+        end
+        pcall(ClearOverrideBindings, CS.owner)
+        CS.bound = false
+        CS.clearPending = false
+    end
+end
+
+
+
+local function BlizzardUses(btn)
+    return btn and btn.IsEnabled and btn:IsEnabled() and true or false
+end
+
 
 function CS:Apply(bar)
-    if not bar or not bar.faceBottomButton then return end
-
-    local use = ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("mapShortcut")
-    if not use then return end
-
-    if InCombatLockdown() then
-        pendingCombat = "apply"
-        return
-    end
-
-    local btn = bar.faceBottomButton
-    local ok, err = pcall(function()
-        btn:SetEnabled(true)
+    local btn = bar and bar.faceBottomButton
+    if not btn or not Uses() or BlizzardUses(btn) then return end
+    pcall(function()
         btn:SetAlpha(1)
         btn.SpecialActionIcon:SetTexture(MAP_ICON)
         btn.SpecialActionIcon:Show()
     end)
-    if not ok and ThugUI.Diagnostics then
-        ThugUI.Diagnostics:Log("SHORTCUTS", "Apply refused: %s", tostring(err))
-    end
 end
 
-function CS:Disable(bar)
-    if not bar or not bar.faceBottomButton then return end
-    if InCombatLockdown() then
-        pendingCombat = "disable"
-        return
-    end
 
-    
-    local btn = bar.faceBottomButton
-    local ok, err = pcall(function()
-        btn:SetEnabled(false)
+function CS:Disable(bar)
+    self:Bind(false)
+    local btn = bar and bar.faceBottomButton
+    if not btn or BlizzardUses(btn) then return end
+    pcall(function()
         btn:SetAlpha(FADE_OPACITY)
         btn.SpecialActionIcon:Hide()
     end)
-    if not ok and ThugUI.Diagnostics then
-        ThugUI.Diagnostics:Log("SHORTCUTS", "Disable refused: %s", tostring(err))
-    end
 end
 
+function CS:OnBarShown(bar)
+    if not Uses() or Combat() then return end
+    if BlizzardUses(bar and bar.faceBottomButton) then
+        if ThugUI.Diagnostics then
+            ThugUI.Diagnostics:LogOnce("shortcuts-blizzard-uses", "SHORTCUTS",
+                "Blizzard's own pass enabled the bottom face button; map shortcut left off")
+        end
+        return
+    end
+    self:Apply(bar)
+    self:Bind(true)
+end
 
-
-
-
-
-
-
-CS.PAUSED = true
+function CS:OnBarHidden()
+    self:Bind(false)
+end
 
 function CS:Install()
-    if CS.PAUSED then
-        if ThugUI.Diagnostics then
-            ThugUI.Diagnostics:LogOnce("shortcuts-paused", "SHORTCUTS", "map shortcut paused (opening the map from addon code breaks gamepad control)")
-        end
-        return false
-    end
     local bar = ThugUI.ControllerMode and ThugUI.ControllerMode:GetShortcutsBar()
     if not bar then
         if not CS.missingLogged then
             CS.missingLogged = true
-            if ThugUI.Diagnostics then
-                ThugUI.Diagnostics:Log("SHORTCUTS", "shortcuts bar not found; map shortcut not installed yet")
-            end
+            Log("shortcuts bar not found; map shortcut not installed yet")
         end
         return false
     end
-
     if CS.installed then return true end
     CS.installed = true
 
     
-    
-    
-    
-    
-    
-    
-    
-    hooksecurefunc(bar, "SetUpFaceBottom", function(b)
-        local btn = b and b.faceBottomButton
-        if btn and btn.IsEnabled and btn:IsEnabled() then
-            if ThugUI.Diagnostics then
-                ThugUI.Diagnostics:LogOnce("shortcuts-blizzard-uses", "SHORTCUTS",
-                    "Blizzard's own pass enabled the bottom face button; map shortcut left off")
-            end
-            return
-        end
-        CS:Apply(b)
-    end)
-
-    
-    for _, side in ipairs({ bar.Left, bar.Right }) do
-        local b = side and side.ActionButton4
-        if b and not hookedShortcuts[b] and b.HookScript then
-            hookedShortcuts[b] = true
-            b:HookScript("PostClick", function(self, _, down)
-                if not down or self ~= bar.faceBottomButton then return end
-                local use = ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("mapShortcut")
-                if ThugUI.Diagnostics then
-                    ThugUI.Diagnostics:Log("SHORTCUTS", "shortcut map button pressed; %s",
-                        use and "toggling world map" or "map shortcut not in use")
-                end
-                if use and _G.ToggleWorldMap then _G.ToggleWorldMap() end
-            end)
-        end
+    if bar.SetUpFaceBottom then
+        hooksecurefunc(bar, "SetUpFaceBottom", function(b) CS:Apply(b) end)
     end
-
+    bar:HookScript("OnShow", function(b) CS:OnBarShown(b) end)
+    bar:HookScript("OnHide", function() CS:OnBarHidden() end)
     CS:Apply(bar)
+    if bar:IsShown() then CS:OnBarShown(bar) end
     return true
 end
 
 function CS:Initialize()
     local frame = CreateFrame("Frame")
     frame:SetScript("OnEvent", function(self, event)
-        if not ThugUI:IsModuleOn("controller") then self:UnregisterAllEvents() return end
+        if not ThugUI:IsModuleOn("controller") then
+            CS:Bind(false)
+            self:UnregisterAllEvents()
+            return
+        end
         if event == "PLAYER_ENTERING_WORLD" then
             CS:Install()
+        elseif event == "PLAYER_REGEN_DISABLED" then
+            
+            CS:Bind(false)
         elseif event == "PLAYER_REGEN_ENABLED" then
-            local todo = pendingCombat
-            pendingCombat = nil
-            local bar = ThugUI.ControllerMode and ThugUI.ControllerMode:GetShortcutsBar()
-            if todo == "apply" then
-                CS:Apply(bar)
-            elseif todo == "disable" then
-                CS:Disable(bar)
-            end
+            if CS.clearPending then CS:Bind(false) end
         end
     end)
     ThugUI.SafeRegisterEvent(frame, "PLAYER_ENTERING_WORLD")
+    ThugUI.SafeRegisterEvent(frame, "PLAYER_REGEN_DISABLED")
     ThugUI.SafeRegisterEvent(frame, "PLAYER_REGEN_ENABLED")
 
     if C_Timer and C_Timer.After then
@@ -167,8 +171,9 @@ function CS:Initialize()
         local function Refresh()
             if not CS.installed then return end
             local bar = ThugUI.ControllerMode:GetShortcutsBar()
-            if ThugUI.ControllerMode:Uses("mapShortcut") then
+            if Uses() then
                 CS:Apply(bar)
+                if bar and bar:IsShown() then CS:OnBarShown(bar) end
             else
                 CS:Disable(bar)
             end

@@ -1035,6 +1035,52 @@ function MP:MigrateCombatToggle()
     end
 end
 
+
+
+
+
+
+function MP:ProbeOverlays()
+    local D = ThugUI.Diagnostics
+    if not (D and Minimap and EnumerateFrames) then return end
+    local ms = Minimap:GetEffectiveScale()
+    local l, b, w, h = Minimap:GetRect()
+    if not l then D:Log("MINIMAP", "probe: the minimap has no rect") return end
+    l, b, w, h = l * ms, b * ms, w * ms, h * ms
+    local holder = self.holder
+    local found = 0
+    local f = EnumerateFrames()
+    while f do
+        local ok, visible = pcall(f.IsVisible, f)
+        if ok and visible then
+            local okC, x, y = pcall(f.GetCenter, f)
+            if okC and type(x) == "number" and type(y) == "number" then
+                local s = f:GetEffectiveScale()
+                x, y = x * s, y * s
+                if x > l and x < l + w and y > b and y < b + h then
+                    local p, inside = f, false
+                    while p do
+                        if p == holder then inside = true break end
+                        p = p:GetParent()
+                    end
+                    if not inside then
+                        found = found + 1
+                        local okN, name = pcall(function() return f:GetDebugName() end)
+                        local parent = f:GetParent()
+                        local okP, pname = pcall(function() return parent and parent:GetDebugName() end)
+                        D:Log("MINIMAP", "probe: over the map, outside the holder: %s (parent %s, strata %s, %dx%d)",
+                            okN and tostring(name) or "?", okP and tostring(pname) or "?",
+                            tostring(f:GetFrameStrata()), math.floor((f:GetWidth() or 0) + 0.5), math.floor((f:GetHeight() or 0) + 0.5))
+                    end
+                end
+            end
+        end
+        f = EnumerateFrames(f)
+    end
+    D:Log("MINIMAP", "probe: %d frame(s) over the map outside the holder; holder alpha %s",
+        found, holder and tostring(holder:GetAlpha()) or "no holder")
+end
+
 function MP:ApplyVisibility(alpha)
     if not (self.active and self.holder) then return end
     if alpha == 0 then

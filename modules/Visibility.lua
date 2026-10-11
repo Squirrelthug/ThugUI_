@@ -38,6 +38,15 @@
 
 
 
+
+
+
+
+
+
+
+
+
 local ThugUI = _G.ThugUI
 local V = {}
 ThugUI.Visibility = V
@@ -66,7 +75,22 @@ local DEFAULTS = {
     movingInstance = false,
     movingPvp = false,
     movingCombat = false,
+    fadeFlying = false,  
+    flyingAlpha = 0,
 }
+
+
+
+local KEY_DEFAULTS = {
+    orbHealth = { fadeFlying = true },
+    orbResource = { fadeFlying = true },
+}
+
+local function Default(key, k)
+    local own = KEY_DEFAULTS[key]
+    if own and own[k] ~= nil then return own[k] end
+    return DEFAULTS[k]
+end
 
 
 
@@ -96,6 +120,21 @@ local isMoving = false
 local movingSince = 0     
 local MAX_FADE_TIME = 20
 local lastPadInput = -math.huge   
+local isFlying = false
+
+
+local function Plain(fn, ...)
+    if type(fn) ~= "function" then return false end
+    local ok, v = pcall(fn, ...)
+    if not ok or (issecretvalue and issecretvalue(v)) then return false end
+    return v and true or false
+end
+
+
+local function ReadFlying()
+    return Plain(UnitOnTaxi, "player") or Plain(IsFlying)
+end
+V.ReadFlying = ReadFlying
 
 
 
@@ -126,10 +165,11 @@ V.driver = CreateFrame("Frame")
 local function Read(key)
     if not KEYS[key] then error("Invalid Visibility key: " .. tostring(key)) end
     local t = ThugUIDB.Visibility and ThugUIDB.Visibility[key]
-    if not t then return DEFAULTS end
+    if not t and not KEY_DEFAULTS[key] then return DEFAULTS end
+    t = t or {}
     return setmetatable({}, { __index = function(_, k)
         local v = t[k]
-        if v == nil then return DEFAULTS[k] end
+        if v == nil then return Default(key, k) end
         return v
     end })
 end
@@ -143,8 +183,8 @@ function V:Get(key)
         t = {}
         ThugUIDB.Visibility[key] = t
     end
-    for k, v in pairs(DEFAULTS) do
-        if t[k] == nil then t[k] = v end
+    for k in pairs(DEFAULTS) do
+        if t[k] == nil then t[k] = Default(key, k) end
     end
     return t
 end
@@ -177,8 +217,31 @@ end
 
 V.IsSoftShown = V.IsOverrideShown
 
+local function Clamp01(v)
+    v = tonumber(v) or 0
+    if v < 0 then return 0 elseif v > 1 then return 1 end
+    return v
+end
+
+
+
+
+local function Flies(s)
+    return s.fadeFlying == true and ReadFlying()
+end
+
+function V:FlyingApplies(key)
+    return Flies(Read(key))
+end
+
+function V:IsFlying()
+    return isFlying
+end
+
 function V:Alpha(key)
     local s = Read(key)
+    
+    if Flies(s) then return Clamp01(s.flyingAlpha) end
     local o = Override(self, s)
     if o == "target" then return tonumber(s.targetAlpha) or 1 end
     if o == "soft" then return tonumber(s.softAlpha) or 0.5 end
@@ -273,7 +336,7 @@ end
 function V:IsDefault(key)
     local s = Read(key)
     return s.mode == "always" and not s.hideResting and s.oocAlpha == 1 and not s.showSoft
-        and not s.showTarget and not s.fadeMoving and not s.padReveal
+        and not s.showTarget and not s.fadeMoving and not s.padReveal and not s.fadeFlying
 end
 
 function V:InCombat()
@@ -337,6 +400,26 @@ local function FadeTick(_, elapsed)
     if not busy then V.driver:SetScript("OnUpdate", nil) end
 end
 
+
+local function SetFlying(now)
+    if now == isFlying then return end
+    isFlying = now
+    for key in pairs(callbacks) do
+        if Read(key).fadeFlying then Fire(key) end
+    end
+end
+V.SetFlying = SetFlying  
+
+V.flyWatch = CreateFrame("Frame")
+local flyElapsed = 0
+V.flyWatch:SetScript("OnUpdate", function(_, elapsed)
+    flyElapsed = flyElapsed + (elapsed or 0)
+    if flyElapsed < 0.5 then return end
+    flyElapsed = 0
+    SetFlying(ReadFlying())
+end)
+V.flyWatch:SetScript("OnEvent", function() SetFlying(ReadFlying()) end)
+
 function V:Register(key, fn)
     if not KEYS[key] then error("Invalid Visibility key: " .. tostring(key)) end
     callbacks[key] = callbacks[key] or {}
@@ -375,6 +458,7 @@ V.driver:SetScript("OnEvent", function(_, event)
         
         local ok, moving = pcall(IsPlayerMoving)
         isMoving = ok and moving and true or false
+        isFlying = ReadFlying()
     end
     
     
@@ -434,6 +518,9 @@ function V:Initialize()
     ThugUI.SafeRegisterEvent(V.driver, "PLAYER_STARTED_MOVING")
     ThugUI.SafeRegisterEvent(V.driver, "PLAYER_STOPPED_MOVING")
     ThugUI.SafeRegisterEvent(V.driver, "ZONE_CHANGED_NEW_AREA")
+    
+    ThugUI.SafeRegisterEvent(V.flyWatch, "PLAYER_CONTROL_LOST")
+    ThugUI.SafeRegisterEvent(V.flyWatch, "PLAYER_CONTROL_GAINED")
     
     
     pcall(V.EnsurePadListener, V)
@@ -523,8 +610,31 @@ function V:AddControls(panel, key, opts)
             set = function(val) V:Set(key, "softAlpha", val) end,
         }
     end
+    V:AddFlyingControls(panel, key, opts)
     if opts.moving then V:AddMovingControls(panel, key, opts) end
     if opts.padReveal then V:AddPadRevealControls(panel, key, opts) end
+end
+
+
+
+function V:AddFlyingControls(panel, key, opts)
+    Head(panel, opts, "While flying (wins over everything)", "While flying")
+    panel:Checkbox{
+        label = "Fade while flying",
+        tooltip = "On a flight path, or in the air on a flying mount, the frame goes to the "
+            .. "opacity below, whatever else it is set to show for, a target included.",
+        get = function() return Read(key).fadeFlying end,
+        set = function(val) V:Set(key, "fadeFlying", val and true or false) end,
+    }
+    if not opts.noOpacity then
+        panel:Slider{
+            label = "Opacity while flying",
+            tooltip = "0 hides it completely while flying.",
+            min = 0, max = 1, step = 0.05, format = "%.2f",
+            get = function() return Read(key).flyingAlpha end,
+            set = function(val) V:Set(key, "flyingAlpha", val) end,
+        }
+    end
 end
 
 

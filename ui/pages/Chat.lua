@@ -447,12 +447,11 @@ local function Build(panel)
         "Off: your own Target of Target frame (its page) takes over again, or Blizzard's if that is off.")
     
     
-    
-    if not (ThugUI.ControllerShortcuts and ThugUI.ControllerShortcuts.PAUSED) then
+    do
         panel:Checkbox{
             label = "Map on the shortcuts' bottom face button",
-            tooltip = "Blizzard leaves that button empty on the shortcuts bar; this makes it open the world map. "
-                .. "Off: the button is disabled again, as Blizzard has it.",
+            tooltip = "Blizzard leaves that button empty on the shortcuts bar; this makes it open the world map, "
+                .. "out of combat. Off: the button is empty again, as Blizzard has it.",
             
             
             get = function() return not (ThugUIDB.ControllerMode and ThugUIDB.ControllerMode.mapShortcut == false) end,

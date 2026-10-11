@@ -191,7 +191,7 @@ PH:Register{ id = "map-shortcut", group = "MODIFIER", text = "World map",
     keys = function() return PH.Glyph(_G.GAMEPAD_FACE_BOTTOM or "PAD1") end,
     enabled = function()
         local CS = ThugUI.ControllerShortcuts
-        return not (CS and CS.PAUSED) and ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("mapShortcut")
+        return CS ~= nil and ThugUI.ControllerMode and ThugUI.ControllerMode:Uses("mapShortcut")
     end }
 
 

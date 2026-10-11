@@ -2,7 +2,7 @@
 ## Title: ThugUI
 ## Notes: Cursor-anchored cooldown grids, action bars, nameplates and unit frames for retail and WoW Forever
 ## Author: Thug
-## Version: 2.1.0
+## Version: 2.1.1
 ## IconTexture: Interface\AddOns\ThugUI\media\Acorn
 ## X-Curse-Project-ID: 1734288
 ## SavedVariables: ThugUI_DebugLog ThugUI_BCVDump ThugUI_Profiles ThugUI_Packs ThugUI_Config ThugUIDB
