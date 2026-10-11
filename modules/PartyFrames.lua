@@ -60,6 +60,8 @@
 
 
 
+
+
 local ThugUI = _G.ThugUI
 local PF = {}
 ThugUI.PartyFrames = PF
@@ -629,6 +631,18 @@ local function ClickButton(slot)
     return b
 end
 
+
+
+
+local function PlaceClick(b, f)
+    local l, bt, w, h = f:GetRect()
+    b:ClearAllPoints()
+    if not l then b:SetSize(0, 0) b:SetPoint("CENTER", UIParent, "CENTER") return end
+    local k = f:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l * k, bt * k)
+    b:SetSize(w * k, h * k)
+end
+
 function PF:SyncClicks()
     if InCombatLockdown() then self.pendingClicks = true return end
     self.pendingClicks = false
@@ -643,8 +657,7 @@ function PF:SyncClicks()
             if want then
                 b.unit = f.unit
                 b:SetAttribute("macrotext1", "/target " .. f.unit)
-                b:ClearAllPoints()
-                b:SetAllPoints(f)
+                PlaceClick(b, f)
                 b:Show()
             else
                 b.unit = nil
@@ -898,6 +911,7 @@ function PF:Layout()
     self:ApplyUnlocked()
     self:UpdateAll()
 end
+
 
 
 

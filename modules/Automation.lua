@@ -279,11 +279,23 @@ end
 
 
 
+
+
+
+
+
+
+local function GamepadUI()
+    return InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled()
+end
+
 function Automation:OnTradeShow()
+    if GamepadUI() then return end
     if OpenAllBags then OpenAllBags(_G.TradeFrame) end
 end
 
 function Automation:OnTradeClosed()
+    if GamepadUI() then return end
     if CloseAllBags then CloseAllBags(_G.TradeFrame) end
 end
 

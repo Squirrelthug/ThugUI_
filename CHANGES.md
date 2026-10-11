@@ -1,5 +1,15 @@
 # ThugUI
 
+## 2.2.1
+
+- Fixed: party frames could raise a "blocked action" error when combat
+  started. Clicking a party frame still targets that member.
+- Fixed: on WoW Forever with a controller, trading raised errors when the
+  trade window opened, was used or closed. In controller play your bags no
+  longer open by themselves with a trade; mouse play and Retail still do.
+- Changed: Trade and Inspect left the Start-twice wheel's Utility page.
+  They are on the target's own wheel (Triangle).
+
 ## 2.2.0
 
 - New: Chat stream replaces Acorns. Chat runs as a see-through stream of

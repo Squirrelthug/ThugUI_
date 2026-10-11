@@ -523,43 +523,6 @@ function ControllerRadial:UtilityPage()
     
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    page.buttons[6] = {
-        label = "Trade",
-        icon = "Interface\\Icons\\INV_Misc_Coin_01",
-        isEnabled = Safe(function()
-            return TargetIsOtherPlayer() and UnitCanCooperate("player", "target")
-                and not UnitIsDeadOrGhost("player") and not UnitIsDeadOrGhost("target")
-                
-                
-                
-                
-                and (InCombatLockdown() or CheckInteractDistance("target", 2))
-        end),
-        disabledMsg = "Target a friendly player close enough to trade.",
-        action = function() InitiateTrade("target") end,
-    }
-    page.buttons[8] = {
-        label = "Inspect",
-        icon = "Interface\\Icons\\INV_Misc_Spyglass_02",
-        isEnabled = Safe(function()
-            return TargetIsOtherPlayer() and not UnitCanAttack("player", "target")
-                and not UnitIsDeadOrGhost("player")
-                and (not CanInspect or CanInspect("target"))
-        end),
-        disabledMsg = "Target a friendly player close enough to inspect.",
-        action = function()
-            if not InspectUnit then return Refuse("The inspect window is not available.") end
-            InspectUnit("target")
-        end,
-    }
 
     
     local tracking = self:TrackingEntries()
