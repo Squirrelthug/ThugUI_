@@ -1,5 +1,9 @@
 # ThugUI
 
+## 2.2.2
+
+- Updated for Retail 12.1.5 (Interface 120105).
+
 ## 2.2.1
 
 - Fixed: party frames could raise a "blocked action" error when combat
