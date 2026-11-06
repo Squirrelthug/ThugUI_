@@ -30,6 +30,13 @@ ThugUI.ModuleRegistry = {
       clients = { forever = true } },
     
     
+    { id = "facebuttons", title = "Face buttons", icon = "Interface\\Icons\\INV_Misc_Gear_02",
+      desc = "Experimental. Set the four face buttons separately on each of the three layouts.",
+      modules = { "FaceButtons" }, pages = { "facebuttons" },
+      category = "controller", defaultOff = true,
+      clients = { forever = true } },
+    
+    
     
     
     

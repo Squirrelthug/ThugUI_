@@ -26,6 +26,38 @@ ThugUI.defaults.Dialogue = {
     point = "RIGHT", x = -80, y = 0,
 }
 
+function Dialogue:SpokenAvailable()
+    local loaded = false
+    if C_AddOns and C_AddOns.IsAddOnLoaded then
+        loaded = C_AddOns.IsAddOnLoaded("Spoken_Quests")
+    elseif IsAddOnLoaded then
+        loaded = IsAddOnLoaded("Spoken_Quests")
+    end
+    return loaded and type(_G.Spoken) == "table" and type(_G.Spoken.SetPlayerHost) == "function"
+end
+
+
+
+
+
+
+
+
+local SPOKEN_SHOWS_WORDS = { subtitle = true, minimal = true, classic = true }
+
+function Dialogue:SpokenShowsText()
+    local cfg = ThugUIDB.Dialogue
+    if not (cfg and cfg.enabled) or not self:SpokenAvailable() then return false end
+    local api = _G.Spoken
+    if type(api.GetPlayerStyle) ~= "function" then return false end
+    local ok, style = pcall(api.GetPlayerStyle, api)
+    if not ok then
+        ThugUI.Diagnostics:LogOnce("spokenstyle", "DIALOGUE", "Spoken style check failed: %s", tostring(style))
+        return false
+    end
+    return SPOKEN_SHOWS_WORDS[style] == true
+end
+
 function Dialogue.SplitParagraphs(text)
     if not text or text == "" then return {} end
     local paragraphs = {}
@@ -202,10 +234,12 @@ legendString:SetPoint("TOPRIGHT", optionsContainer, "BOTTOMRIGHT", 0, -16)
 legendString:SetJustifyH("LEFT")
 legendString:Hide()
 
+frame.__bg = bg
 frame.__hitRect = hitRect
 frame.__textScroll = textScroll
 frame.__textString = textString
 frame.__rewardsContainer = rewardsContainer
+frame.__titleString = titleString
 frame.__optionsContainer = optionsContainer
 frame.__legendString = legendString
 
@@ -219,6 +253,8 @@ local state = {
     holdTimer = 0,
     rewardChoice = 0,
     closeGen = 0,
+    fullParagraphs = nil,
+    bodyCollapsed = false,
     
     
     manualScroll = false,
@@ -290,6 +326,10 @@ end
 
 
 local function OverflowHeight()
+    if state.bodyCollapsed then
+        textChild:SetHeight(1)
+        return 0
+    end
     local textH = TextHeight()
     textChild:SetHeight(math.max(textH, 1))
     local over = textH - BoxHeight()
@@ -348,8 +388,7 @@ end)
 
 local function UpdateHeight()
     local h = 16
-    h = h + TitleHeight() + 16
-    h = h + BoxHeight() + 16
+    if not state.bodyCollapsed then h = h + TitleHeight() + 16 + BoxHeight() + 16 end
     
     local function Add(region, fallback)
         local v = region:GetHeight()
@@ -366,13 +405,15 @@ function Dialogue:ApplyLayout()
     frame:SetWidth(cfg.width)
     
     local tr, tg, tb = ThugUI.Theme:Color("background")
-    bg:SetColorTexture(tr, tg, tb, cfg.opacity)
+    
+    
+    bg:SetColorTexture(tr, tg, tb, state.bodyCollapsed and 0 or cfg.opacity)
     
     local font, _, flags = titleString:GetFont()
     titleString:SetFont(font, cfg.fontSize - 2, flags)
     ThugUI.Theme:Paint(titleString, "pageTitle")
     titleString:SetHeight(TitleHeight())
-    local top = -(16 + TitleHeight() + 16)
+    local top = state.bodyCollapsed and -16 or -(16 + TitleHeight() + 16)
     textScroll:ClearAllPoints()
     textScroll:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, top)
     textScroll:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -16, top)
@@ -380,7 +421,7 @@ function Dialogue:ApplyLayout()
     local font2, _, flags2 = textString:GetFont()
     textString:SetFont(font2, cfg.fontSize, flags2)
     
-    textScroll:SetHeight(cfg.fontSize * 6)
+    textScroll:SetHeight(state.bodyCollapsed and 1 or cfg.fontSize * 6)
     
     textChild:SetWidth(cfg.width - 32)
     OverflowHeight()
@@ -855,23 +896,33 @@ local function ShowPanel(panelName, title, paragraphs, options, panelType)
     
     if not ThugUI.CombatClose:Allow("dialogue") then return end
     state.closeGen = state.closeGen + 1
+    local showGen = state.closeGen
     state.panel = panelName
+    state.fullParagraphs = paragraphs
     state.paragraphs = paragraphs
+    local wasCollapsed = state.bodyCollapsed
+    
+    
+    
+    local spokenText = Dialogue:SpokenShowsText() and panelName ~= "preview"
+    state.bodyCollapsed = spokenText
+    if spokenText then state.paragraphs = {} end
     state.paragraphIndex = 1
     state.phase = "revealing"
     state.revealCount = 0
     state.holdTimer = 0
     state.rewardChoice = 0
     
-    if paragraphs[1] then
-        state.textLen = Dialogue.VisibleLength(paragraphs[1])
+    if state.paragraphs[1] then
+        state.textLen = Dialogue.VisibleLength(state.paragraphs[1])
         SetBodyText("", true)
     else
         state.phase = "holding"
         SetBodyText("", true)
     end
     
-    titleString:SetText(title or "")
+    state.title = title or ""
+    titleString:SetText(spokenText and "" or state.title)
     
     if panelType == "detail" or panelType == "complete" then
         AddRewards()
@@ -920,7 +971,43 @@ local function ShowPanel(panelName, title, paragraphs, options, panelType)
         frame:Show()
         UpdateHeight()
     else
+        
+        
+        if wasCollapsed ~= state.bodyCollapsed then Dialogue:ApplyLayout() end
         UpdateHeight()
+    end
+
+    
+    
+    if spokenText and C_Timer and C_Timer.After then
+        C_Timer.After(1.5, function()
+            if state.closeGen ~= showGen or state.panel ~= panelName then return end
+            local api = _G.Spoken
+            local current, currentErr
+            if api and api.GetCurrent then
+                local ok, result = pcall(api.GetCurrent, api)
+                if ok then current = result else currentErr = result end
+            else
+                currentErr = "GetCurrent unavailable"
+            end
+            if current then return end
+            if currentErr then
+                ThugUI.Diagnostics:LogOnce("spokenfallback:" .. panelType, "DIALOGUE", "Spoken fallback (%s): %s", panelType, tostring(currentErr))
+            else
+                ThugUI.Diagnostics:LogOnce("spokenfallback:" .. panelType, "DIALOGUE", "Spoken has no text for %s", panelType)
+            end
+            state.paragraphs = state.fullParagraphs
+            state.bodyCollapsed = false
+            titleString:SetText(state.title or "")
+            state.paragraphIndex = 1
+            state.phase = "revealing"
+            state.revealCount = 0
+            state.holdTimer = 0
+            state.textLen = state.paragraphs[1] and Dialogue.VisibleLength(state.paragraphs[1]) or 0
+            SetBodyText("", true)
+            Dialogue:ApplyLayout()
+            UpdateHeight()
+        end)
     end
     
     if not InCombatLockdown() then

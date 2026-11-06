@@ -1,5 +1,24 @@
 # ThugUI
 
+## 2.4.0
+
+- New (WoW Forever, experimental): the Face buttons tile, next to Controller
+  and off by default. Set the four face buttons to a spell or macro,
+  separately on each of the three controller layouts. A button left on
+  Default keeps Blizzard's action, and holding a trigger or bumper still uses
+  those bars. A button you set shows your spell or macro's icon, without a
+  cooldown sweep for now.
+- Changed: the controller wheel opens in combat, as the right-click menu does,
+  so you can invite a player mid-fight. Options that need a secure button are
+  greyed until combat ends. A wheel that is open when combat starts closes.
+- New: the controller buttons hide during NPC dialogue, with a setting on every
+  Visibility section, and while any Spoken box is on screen.
+- New: when the Spoken addon shows the words (Subtitles, Small Window or Large
+  Window), the Dialogue window clears its background and drops its text and
+  title. Rewards, XP and choices stay. Voice Only leaves the window as it is.
+- Fixed: the target frame's aura row no longer goes blank in combat. It now
+  draws through Blizzard's aura container.
+
 ## 2.3.0
 
 - Updated for the release of WoW Forever (1.60.1, build 70790). The game

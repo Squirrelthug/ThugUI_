@@ -47,6 +47,19 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 local ThugUI = _G.ThugUI
 local V = {}
 ThugUI.Visibility = V
@@ -77,6 +90,8 @@ local DEFAULTS = {
     movingCombat = false,
     fadeFlying = false,  
     flyingAlpha = 0,
+    hideDialogue = false,
+    dialogueAlpha = 0,
 }
 
 
@@ -84,6 +99,7 @@ local DEFAULTS = {
 local KEY_DEFAULTS = {
     orbHealth = { fadeFlying = true },
     orbResource = { fadeFlying = true },
+    controllerButtons = { hideDialogue = true },
 }
 
 local function Default(key, k)
@@ -125,6 +141,10 @@ local movingSince = 0
 local MAX_FADE_TIME = 20
 local lastPadInput = -math.huge   
 local isFlying = false
+local inDialogue = false
+local dialogueGen = 0
+local spokenBox = false   
+local spokenGen = 0
 
 
 local function Plain(fn, ...)
@@ -256,6 +276,8 @@ function V:Alpha(key)
     local s = Read(key)
     
     if Flies(s) then return Clamp01(s.flyingAlpha) end
+    
+    if s.hideDialogue == true and (inDialogue or spokenBox) then return Clamp01(s.dialogueAlpha) end
     local o = Override(self, s)
     if o == "target" then return tonumber(s.targetAlpha) or 1 end
     if o == "soft" then return tonumber(s.softAlpha) or 0.5 end
@@ -361,6 +383,7 @@ function V:IsDefault(key)
     local s = Read(key)
     return s.mode == "always" and not s.hideResting and s.oocAlpha == 1 and not s.showSoft
         and not s.showTarget and not s.fadeMoving and not PadOn(s) and not s.fadeFlying
+        and not s.hideDialogue
 end
 
 function V:InCombat()
@@ -433,6 +456,112 @@ local function SetFlying(now)
     end
 end
 V.SetFlying = SetFlying  
+
+local function FireDialogueKeys()
+    for key in pairs(callbacks) do
+        if Read(key).hideDialogue then Fire(key) end
+    end
+end
+
+local function SetInDialogue(now)
+    dialogueGen = dialogueGen + 1
+    if now == inDialogue then return end
+    inDialogue = now
+    FireDialogueKeys()
+end
+V.SetInDialogue = SetInDialogue  
+
+
+
+local SPOKEN_BOXES = {
+    "SpokenSubtitleFrame", "SpokenMinimalPlayerFrame", "SpokenPlayerFrame", "SpokenDialogueUIPlayerFrame",
+}
+local spokenHooked = setmetatable({}, { __mode = "k" })
+local spokenApi
+
+local function AnySpokenBox()
+    for _, name in ipairs(SPOKEN_BOXES) do
+        local f = _G[name]
+        if f and f.IsShown and f:IsShown() then return true end
+    end
+    return false
+end
+
+local function SetSpokenBox(now)
+    spokenGen = spokenGen + 1
+    if now == spokenBox then return end
+    spokenBox = now
+    FireDialogueKeys()
+end
+V.SetSpokenBox = SetSpokenBox  
+
+
+
+local function SpokenBoxChanged()
+    if AnySpokenBox() then
+        SetSpokenBox(true)
+        return
+    end
+    spokenGen = spokenGen + 1
+    local gen = spokenGen
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0.3, function()
+            if spokenGen == gen and not AnySpokenBox() then SetSpokenBox(false) end
+        end)
+    else
+        SetSpokenBox(false)
+    end
+end
+
+local function HookSpokenBoxes()
+    for _, name in ipairs(SPOKEN_BOXES) do
+        local f = _G[name]
+        if f and f.HookScript and not spokenHooked[f] then
+            spokenHooked[f] = true
+            f:HookScript("OnShow", SpokenBoxChanged)
+            f:HookScript("OnHide", SpokenBoxChanged)
+        end
+    end
+end
+
+
+function V.ConnectSpoken()
+    local api = _G.Spoken
+    if type(api) ~= "table" or api == spokenApi then return end
+    HookSpokenBoxes()
+    if type(api.RegisterCallback) ~= "function" then return end
+    
+    
+    local ok, err = pcall(api.RegisterCallback, api, "AUDIO_CHANGED", function()
+        HookSpokenBoxes()
+        if AnySpokenBox() ~= spokenBox then SpokenBoxChanged() end
+    end)
+    if ok then
+        spokenApi = api
+    else
+        ThugUI.Diagnostics:LogOnce("spokenboxes", "VISIBILITY", "Spoken callback failed: %s", tostring(err))
+    end
+end
+
+local dialogueEvents = CreateFrame("Frame")
+V.dialogueEvents = dialogueEvents  
+dialogueEvents:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGIN" then
+        V.ConnectSpoken()
+    elseif event == "GOSSIP_CLOSED" or event == "QUEST_FINISHED" then
+        dialogueGen = dialogueGen + 1
+        local gen = dialogueGen
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0.3, function()
+                if dialogueGen == gen then SetInDialogue(false) end
+            end)
+        else
+            SetInDialogue(false)
+        end
+    else
+        SetInDialogue(true)
+    end
+end)
 
 V.flyWatch = CreateFrame("Frame")
 local flyElapsed = 0
@@ -543,6 +672,10 @@ function V:Initialize()
     ThugUI.SafeRegisterEvent(V.driver, "PLAYER_STARTED_MOVING")
     ThugUI.SafeRegisterEvent(V.driver, "PLAYER_STOPPED_MOVING")
     ThugUI.SafeRegisterEvent(V.driver, "ZONE_CHANGED_NEW_AREA")
+    for _, event in ipairs({ "GOSSIP_SHOW", "QUEST_GREETING", "QUEST_DETAIL", "QUEST_PROGRESS", "QUEST_COMPLETE", "GOSSIP_CLOSED", "QUEST_FINISHED", "PLAYER_LOGIN" }) do
+        ThugUI.SafeRegisterEvent(dialogueEvents, event)
+    end
+    V.ConnectSpoken()
     
     ThugUI.SafeRegisterEvent(V.flyWatch, "PLAYER_CONTROL_LOST")
     ThugUI.SafeRegisterEvent(V.flyWatch, "PLAYER_CONTROL_GAINED")
@@ -636,6 +769,7 @@ function V:AddControls(panel, key, opts)
         }
     end
     V:AddFlyingControls(panel, key, opts)
+    V:AddDialogueControls(panel, key, opts)
     
     
     
@@ -647,6 +781,24 @@ function V:AddControls(panel, key, opts)
     if opts.moving ~= false and not opts.noOpacity then V:AddMovingControls(panel, key, opts) end
     if opts.padReveal ~= false and not opts.noOpacity and ThugUI.controllerAtLoad == true then
         V:AddPadRevealControls(panel, key, opts)
+    end
+end
+
+function V:AddDialogueControls(panel, key, opts)
+    Head(panel, opts, "During NPC dialogue", "During NPC dialogue")
+    panel:Checkbox{
+        label = "Hide during NPC dialogue",
+        tooltip = "While talking to an NPC, quest or gossip, or while a Spoken box is up for any line (places and books too), the frame goes to the opacity below, whatever else it is set to show for, a target included.",
+        get = function() return Read(key).hideDialogue end,
+        set = function(val) V:Set(key, "hideDialogue", val and true or false) end,
+    }
+    if not opts.noOpacity then
+        panel:Slider{
+            label = "Opacity during NPC dialogue",
+            min = 0, max = 1, step = 0.05, format = "%.2f",
+            get = function() return Read(key).dialogueAlpha end,
+            set = function(val) V:Set(key, "dialogueAlpha", val) end,
+        }
     end
 end
 

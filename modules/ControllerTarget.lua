@@ -306,6 +306,171 @@ local function AuraPool_Acquire(pool)
     return btn
 end
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local AURA_GAP = 2
+local AURA_GROUPS = {
+    { key = "debuffs", filter = "HARMFUL", showKey = "showDebuffs", isDebuff = true },
+    { key = "buffs", filter = "HELPFUL", showKey = "showBuffs" },
+}
+
+local function AuraLayoutOptions(c)
+    return {
+        elementWidth = c.auraSize, elementHeight = c.auraSize,
+        elementSpacing = AURA_GAP, lineSpacing = AURA_GAP,
+        groupSpacing = AURA_GAP, groupLineSpacing = AURA_GAP,
+    }
+end
+
+
+
+local function AuraLimit(c)
+    return math.max(0, math.floor(Num(c.auraMax, 16) + 0.5))
+end
+
+local function ApplyAuraButtonLook(b, c)
+    pcall(b.button.SetSize, b.button, c.auraSize, c.auraSize)
+    local ats = Num(c.auraTextScale, 1)
+    ScaleFont(b.count, ats)
+    if b.cooldown.SetHideCountdownNumbers then
+        b.cooldown:SetHideCountdownNumbers(c.auraTimers == false)
+    end
+    if b.cooldown.GetCountdownFontString then
+        local cfs = b.cooldown:GetCountdownFontString()
+        if type(cfs) == "table" and cfs.GetFont then ScaleFont(cfs, ats) end
+    end
+end
+
+local function InitAuraButton(engine, group, button)
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    local cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
+    cooldown:SetAllPoints()
+    cooldown:SetDrawEdge(false)
+    
+    
+    
+    local top = CreateFrame("Frame", nil, button)
+    top:SetAllPoints()
+    top:SetFrameLevel(cooldown:GetFrameLevel() + 1)
+    top:EnableMouse(false)
+    local count = top:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    count:SetPoint("BOTTOMRIGHT", 2, -2)
+    if group.isDebuff then
+        local border = top:CreateTexture(nil, "OVERLAY")
+        border:SetAllPoints()
+        border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
+        border:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
+        border:SetVertexColor(1, 0, 0)
+    end
+    pcall(button.EnableMouse, button, false)
+
+    local b = { button = button, cooldown = cooldown, count = count }
+    table.insert(engine.buttons, b)
+    
+    
+    ApplyAuraButtonLook(b, engine.cfg)
+    button:SetIcon(icon)
+    button:SetDurationCooldown(cooldown)
+    
+    button:SetApplicationCount(count, {})
+end
+
+local function ApplyAuraEngine(engine, c)
+    local container = engine.container
+    local below = c.auras == "below"
+    local point = below and "TOPLEFT" or "BOTTOMLEFT"
+    container:ClearAllPoints()
+    container:SetPoint(point, engine.anchor, point)
+    container:SetFlowLayoutAnchorPoint(point)
+    local flow = AnchorUtil.FlowDirection
+    container:SetFlowLayoutGrowthDirection(flow.Right, below and flow.Down or flow.Up)
+    
+    container:SetFlowLayoutMaximumLineSize(c.auraPerRow * (c.auraSize + AURA_GAP))
+    for _, group in ipairs(AURA_GROUPS) do
+        container:SetAuraGroupLayout(group.key, AuraLayoutOptions(c))
+        container:SetAuraGroupMaxFrameCount(group.key, c[group.showKey] ~= false and AuraLimit(c) or 0)
+    end
+    for _, b in ipairs(engine.buttons) do ApplyAuraButtonLook(b, c) end
+end
+
+
+
+local function AuraEngine(f, unit, c)
+    if f.auraEngine ~= nil then return f.auraEngine end
+    local engine = { buttons = {}, cfg = c, anchor = f.auraContainer }
+    local ok, err = pcall(function()
+        if C_AddOns and C_AddOns.LoadAddOn and not C_AddOns.IsAddOnLoaded("Blizzard_AuraContainer") then
+            C_AddOns.LoadAddOn("Blizzard_AuraContainer")
+        end
+        local container = CreateFrame("AuraContainer", nil, f.auraContainer, "CustomAuraContainerTemplate")
+        engine.container = container
+        
+        
+        container:SetPoint("TOPLEFT", f.auraContainer, "TOPLEFT")
+        container:SetSize(1, 1)
+        for _, group in ipairs(AURA_GROUPS) do
+            container:AddAuraGroup(group.key, group.filter, {
+                maxFrameCount = AuraLimit(c),
+                layout = AuraLayoutOptions(c),
+                initializeFrame = function(button) InitAuraButton(engine, group, button) end,
+            })
+        end
+        container:SetUnit(unit)
+    end)
+    if not ok then
+        if engine.container and engine.container.Hide then pcall(engine.container.Hide, engine.container) end
+        ThugUI.Diagnostics:Log("ControllerTarget", "Aura container unavailable, reading auras by index: " .. tostring(err))
+        f.auraEngine = false
+        return false
+    end
+    f.auraEngine = engine
+    return engine
+end
+
+local function UpdateAuraEngine(engine, c)
+    engine.cfg = c
+    local sig = table.concat({
+        c.auras, c.auraSize, c.auraPerRow, c.auraMax, Num(c.auraTextScale, 1),
+        tostring(c.showDebuffs ~= false), tostring(c.showBuffs ~= false), tostring(c.auraTimers ~= false),
+    }, "|")
+    
+    
+    if sig ~= engine.sig and not InCombatLockdown() then
+        local ok, err = pcall(ApplyAuraEngine, engine, c)
+        if ok then
+            engine.sig = sig
+        else
+            ThugUI.Diagnostics:Log("ControllerTarget", "Aura container settings failed: " .. tostring(err))
+        end
+    end
+    
+    
+    pcall(engine.container.UpdateAllAuras, engine.container)
+end
+
 local function UpdateAuras(f, unit, c)
     for _, btn in ipairs(f.auraPool) do
         btn.inUse = false
@@ -318,12 +483,17 @@ local function UpdateAuras(f, unit, c)
     end
     
     f.auraContainer:Show()
+
+    local engine = AuraEngine(f, unit, c)
+    if engine then
+        UpdateAuraEngine(engine, c)
+        return
+    end
+
+    
     
     local function AddAuras(filter, isDebuff)
         if f.auraCount >= c.auraMax then return end
-        
-        
-        
         
         
         

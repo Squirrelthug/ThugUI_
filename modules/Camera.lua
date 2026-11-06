@@ -89,6 +89,34 @@ local alphaEaseTime = 0
 
 
 
+local spokenHost = CreateFrame("Frame", "ThugUI_SpokenHost", UIParent)
+spokenHost:SetAllPoints(UIParent)
+if spokenHost.SetIgnoreParentAlpha then spokenHost:SetIgnoreParentAlpha(true) end
+spokenHost:EnableMouse(false)
+spokenHost:Show()
+
+
+local spokenHostWanted = false
+
+local function SyncSpokenHost()
+    
+    
+    local want = (uiFaded or UIParent:GetAlpha() < 1)
+        and ThugUI.Dialogue and ThugUI.Dialogue:SpokenShowsText() or false
+    if want == spokenHostWanted then return end
+    local api = _G.Spoken
+    if type(api) ~= "table" or type(api.SetPlayerHost) ~= "function" then return end
+    spokenHostWanted = want
+    local ok, err = pcall(api.SetPlayerHost, api, want and spokenHost or nil)
+    if not ok then
+        ThugUI.Diagnostics:LogOnce("spokenhost", "CAMERA", "Spoken host failed: %s", tostring(err))
+    end
+    
+    
+end
+
+
+
 local function StopRotationFromHook()
     if isRotating and MoveViewRightStop then MoveViewRightStop() end
     isRotating = false
@@ -279,9 +307,9 @@ Camera:SetScript("OnUpdate", function(self, elapsed)
     
     
     
-    if ThugUI.moduleOn and not ThugUI:IsModuleOn("camera") then self:SetScript("OnUpdate", nil) return end
+    if ThugUI.moduleOn and not ThugUI:IsModuleOn("camera") then self:SetScript("OnUpdate", nil) SyncSpokenHost() return end
     local cfg = ThugUIDB.Camera
-    if not cfg or not cfg.enabled then return end
+    if not cfg or not cfg.enabled then SyncSpokenHost() return end
     
     pollTimer = pollTimer + elapsed
     if pollTimer >= 0.5 then
@@ -345,6 +373,7 @@ Camera:SetScript("OnUpdate", function(self, elapsed)
             end
         end
     end
+    SyncSpokenHost()
 end)
 
 
@@ -646,6 +675,7 @@ function Camera:SetEnabled(enabled)
         self:UnregisterAllEvents()
         currentSituation = nil
     end
+    SyncSpokenHost()
 end
 
 function Camera:GetActiveSituation()

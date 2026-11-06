@@ -164,7 +164,10 @@ local GROUP = {
             isEnabled = Safe(function() return TargetIsOtherPlayer() and not TargetInGroup() end),
             disabledMsg = "Target a player who is not in your group.",
             action = function()
-                local name = TargetName()
+                
+                
+                local name = ThugUI.UnitMenu and ThugUI.UnitMenu:Name("target")
+                if not name then return Refuse("Not available right now.") end
                 if C_PartyInfo and C_PartyInfo.InviteUnit then
                     C_PartyInfo.InviteUnit(name)
                 else
@@ -1833,7 +1836,9 @@ local function StickListener()
             Log("stick listener: %s %s", tostring(stick), stick == POINTING_STICK and "kept" or "passed on")
         end
         if stick == POINTING_STICK then
-            ControllerRadial:Stick(x or 0, y or 0)
+            
+            
+            if frame and frame:IsShown() then ControllerRadial:Stick(x or 0, y or 0) end
             return false
         end
         return true
@@ -1851,73 +1856,96 @@ ControllerRadial.StickListener = StickListener
 
 ControllerRadial.USE_STICK_LISTENER = false
 
+
+
+
+
+
 local function SetInput(on)
-    if frame.EnableGamePadButton then
-        local ok, err = pcall(frame.EnableGamePadButton, frame, on)
-        if not ok then Log("EnableGamePadButton(%s) refused: %s", tostring(on), tostring(err)) end
-    end
-    
-    if frame.EnableGamePadStick then pcall(frame.EnableGamePadStick, frame, false) end
+    local fight = InCombatLockdown()
     local l = StickListener()
     if ControllerRadial.USE_STICK_LISTENER and l.EnableGamePadStick then
-        local ok, err = pcall(l.EnableGamePadStick, l, on)
-        if not ok then Log("stick listener EnableGamePadStick(%s) refused: %s", tostring(on), tostring(err)) end
+        if not fight then
+            local ok, err = pcall(l.EnableGamePadStick, l, on)
+            if not ok then Log("stick listener EnableGamePadStick(%s) refused: %s", tostring(on), tostring(err)) end
+        end
         ControllerRadial.polling = false
     else
-        if l.EnableGamePadStick then pcall(l.EnableGamePadStick, l, false) end
+        if l.EnableGamePadStick and not fight then pcall(l.EnableGamePadStick, l, false) end
         ControllerRadial.polling = on and CanPoll() or false
         if CanPoll() then ControllerRadial:HoldCamera(on) end
     end
 end
 
+local function EnsureFrame()
+    if frame then return end
+    BuildFrame()
+    
+    
+    
+    
+    if ThugUI.CombatClose then
+        ThugUI.CombatClose:Register("wheel", function() return frame and frame:IsShown() end,
+            function() ControllerRadial:Close() end, { reopenInCombat = true })
+    end
+    frame:SetScript("OnGamePadButtonDown", OnButton)
+    frame:SetScript("OnGamePadStick", OnStick)
+    
+    frame:SetScript("OnGamePadButtonUp", function(_, button) held[button] = nil end)
+    frame:SetScript("OnHide", function() SetInput(false) end)
+    frame.timeSinceDraw = 0
+    frame:SetScript("OnUpdate", function(self, elapsed)
+        if ControllerRadial.polling then
+            local x, y = ControllerRadial:ReadPointingStick()
+            if x then ControllerRadial:Stick(x, y) end
+        end
+        if ControllerRadial.inTravelMode then
+            self.timeSinceDraw = self.timeSinceDraw + elapsed
+            if self.timeSinceDraw >= 1.0 then
+                self.timeSinceDraw = 0
+                ControllerRadial:RebuildTravelPages()
+                ControllerRadial:Draw()
+            end
+        end
+    end)
+end
 
 
 
-local function InFight()
-    return InCombatLockdown and InCombatLockdown() or false
+
+function ControllerRadial:ArmInput()
+    if self.inputArmed then return true end
+    if InCombatLockdown() then return false end
+    EnsureFrame()
+    if not frame.EnableGamePadButton then
+        Log("no EnableGamePadButton on this client")
+        return false
+    end
+    local okProp = pcall(frame.SetPropagateKeyboardInput, frame, false)
+    local okButton, err = pcall(frame.EnableGamePadButton, frame, true)
+    if not okButton then Log("EnableGamePadButton refused: %s", tostring(err)) end
+    
+    
+    
+    
+    
+    
+    if frame.EnableGamePadStick then pcall(frame.EnableGamePadStick, frame, false) end
+    local l = StickListener()
+    if l.EnableGamePadStick and not self.USE_STICK_LISTENER then pcall(l.EnableGamePadStick, l, false) end
+    self.inputArmed = okProp and okButton
+    return self.inputArmed
 end
 
 function ControllerRadial:Open()
     
     
-    
-    if InFight() then
+    if not self:ArmInput() and InCombatLockdown() then
         Refuse("Not in combat.")
-        Log("open refused: in combat")
+        Log("open refused: input not armed before combat")
         return
     end
-    if not frame then
-        BuildFrame()
-        
-        
-        if ThugUI.CombatClose then
-            ThugUI.CombatClose:Register("wheel", function() return frame and frame:IsShown() end,
-                function() ControllerRadial:Close() end, { reopenInCombat = false })
-        end
-        frame:SetScript("OnGamePadButtonDown", OnButton)
-        frame:SetScript("OnGamePadStick", OnStick)
-        
-        frame:SetScript("OnGamePadButtonUp", function(_, button) held[button] = nil end)
-        frame:SetScript("OnHide", function() SetInput(false) end)
-        frame.timeSinceDraw = 0
-        frame:SetScript("OnUpdate", function(self, elapsed)
-            if ControllerRadial.polling then
-                local x, y = ControllerRadial:ReadPointingStick()
-                if x then ControllerRadial:Stick(x, y) end
-            end
-            if ControllerRadial.inTravelMode then
-                self.timeSinceDraw = self.timeSinceDraw + elapsed
-                if self.timeSinceDraw >= 1.0 then
-                    self.timeSinceDraw = 0
-                    ControllerRadial:RebuildTravelPages()
-                    ControllerRadial:Draw()
-                end
-            end
-        end)
-    end
-    if not InCombatLockdown() and not self.propagationSet then
-        self.propagationSet = pcall(frame.SetPropagateKeyboardInput, frame, false)
-    end
+    EnsureFrame()
     ResetSubDial(self)
     self:BuildPages()
     
@@ -2091,6 +2119,7 @@ function ControllerRadial:Initialize()
             Log("wheel binding now %s", button and (table.concat(mods, "-") .. (#mods > 0 and "-" or "") .. button) or "unbound")
         else
             ControllerRadial:StartListener()
+            ControllerRadial:ArmInput()
             ControllerRadial:InstallTriangle()
             
             if event == "PLAYER_LOGIN" and not (frame and frame:IsShown()) then ControllerRadial:HoldCamera(false) end

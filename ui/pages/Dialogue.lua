@@ -42,6 +42,9 @@ function Page:Build(host, panel)
         set = function(v) Cfg().enabled = v end,
     }
     panel:Note("Turning this on or off takes effect on the next |cffffd100/reload|r.")
+    panel:Note("With the Spoken addon on Subtitles, Small Window or Large Window, Spoken shows "
+        .. "the words: this window goes clear and keeps the title, rewards and numbered lines. "
+        .. "On Voice Only, or when Spoken has no line for a quest, it shows as set here.")
 
     panel:Checkbox{
         label = "Unlocked (drag to move)",
