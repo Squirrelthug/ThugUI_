@@ -166,7 +166,16 @@ V.driver = CreateFrame("Frame")
 
 
 
+
+
+
+local function Resolve(key)
+    if type(key) == "function" then return key() end
+    return key
+end
+
 local function Read(key)
+    key = Resolve(key)
     if not KEYS[key] then error("Invalid Visibility key: " .. tostring(key)) end
     local t = ThugUIDB.Visibility and ThugUIDB.Visibility[key]
     if not t and not KEY_DEFAULTS[key] then return DEFAULTS end
@@ -180,6 +189,7 @@ end
 
 
 function V:Get(key)
+    key = Resolve(key)
     if not KEYS[key] then error("Invalid Visibility key: " .. tostring(key)) end
     ThugUIDB.Visibility = ThugUIDB.Visibility or {}
     local t = ThugUIDB.Visibility[key]
@@ -441,6 +451,7 @@ function V:Register(key, fn)
 end
 
 function V:Set(key, field, value)
+    key = Resolve(key)
     self:Get(key)[field] = value
     Fire(key)
 end

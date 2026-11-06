@@ -600,6 +600,24 @@ end
 
 local clicks = {}
 PF.clicks = clicks
+local watched = {}
+PF.watched = watched
+local watchUnavailable = false
+
+local function WatchUnavailable(err)
+    if watchUnavailable then return end
+    watchUnavailable = true
+    local D = ThugUI.Diagnostics
+    if D and D.LogOnce then
+        D:LogOnce("party-unit-watch-" .. tostring(err), "CLICKS", "RegisterUnitWatch unavailable: %s; using manual clicks", tostring(err))
+    elseif D and D.Log then
+        D:Log("CLICKS", "RegisterUnitWatch unavailable: %s; using manual clicks", tostring(err))
+    end
+end
+
+function PF._ResetWatchForTests()
+    watchUnavailable = false
+end
 
 local function ClickButton(slot)
     if clicks[slot] then return clicks[slot] end
@@ -626,6 +644,10 @@ local function ClickButton(slot)
             ThugUI.UnitMenuWindow:Open(self.unit, self)
         end
     end)
+    
+    
+    
+    if type(_G.ClickCastFrames) == "table" then _G.ClickCastFrames[b] = true end
     b:Hide()
     clicks[slot] = b
     return b
@@ -657,10 +679,33 @@ function PF:SyncClicks()
             if want then
                 b.unit = f.unit
                 b:SetAttribute("macrotext1", "/target " .. f.unit)
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                b:SetAttribute("unit", f.unit)
                 PlaceClick(b, f)
-                b:Show()
+                if not watched[b] and not watchUnavailable then
+                    local ok, err = pcall(RegisterUnitWatch, b)
+                    if ok then watched[b] = true else WatchUnavailable(err) end
+                end
+                
+                if not watched[b] then b:Show() end
             else
                 b.unit = nil
+                
+                
+                
+                if watched[b] then
+                    pcall(UnregisterUnitWatch, b)
+                    watched[b] = nil
+                end
+                b:SetAttribute("unit", nil)
                 b:Hide()
             end
         end

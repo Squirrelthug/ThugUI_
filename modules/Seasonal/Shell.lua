@@ -2095,10 +2095,94 @@ function Seasonal:Initialize()
 
     
     
+    
     SLASH_THUGSEASON1 = "/thugseason"
-    SlashCmdList["THUGSEASON"] = function()
+    SlashCmdList["THUGSEASON"] = function(msg)
+        local cmd = type(msg) == "string" and msg:lower():match("^%s*(%S*)") or ""
+        if cmd == "loot" then
+            Seasonal:DumpRaidLoot()
+            return
+        end
         Seasonal:Toggle()
     end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function Seasonal:DumpRaidLoot()
+    
+    
+    ThugUI_DebugLog = ThugUI_DebugLog or {}
+    local dump = { capturedAt = date("%Y-%m-%d %H:%M:%S"), lines = {} }
+    ThugUI_DebugLog.raidLoot = dump
+    local function Out(fmt, ...)
+        table.insert(dump.lines, string.format(fmt, ...))
+    end
+    local Data = self.Data
+    local seasonRaid = Data and Data.GetSeasonRaid and Data:GetSeasonRaid()
+    if not (seasonRaid and type(seasonRaid.instances) == "table") then
+        print("|cff00ff00ThugUI:|r the game has not named this season's raids yet; open the Great Vault once and try again.")
+        return
+    end
+    if not (EJ_SelectInstance and EJ_SelectEncounter and EJ_GetNumLoot and EJ_GetEncounterInfoByIndex
+            and C_EncounterJournal and C_EncounterJournal.GetLootInfoByIndex) then
+        print("|cff00ff00ThugUI:|r this client has no Encounter Journal loot API.")
+        return
+    end
+    
+    
+    local NORMAL = 14
+    local oldDiff = EJ_GetDifficulty and EJ_GetDifficulty()
+    local oldClass, oldSpec
+    if EJ_GetLootFilter then oldClass, oldSpec = EJ_GetLootFilter() end
+    local items, uncached = 0, 0
+    local ok, err = pcall(function()
+        for _, instance in ipairs(seasonRaid.instances) do
+            local instanceID = instance.instanceID
+            if type(instanceID) == "number" then
+                EJ_SelectInstance(instanceID)
+                if EJ_SetDifficulty then EJ_SetDifficulty(NORMAL) end
+                if EJ_SetLootFilter then EJ_SetLootFilter(0, 0) end
+                local index = 1
+                while true do
+                    local bossName, _, encounterID = EJ_GetEncounterInfoByIndex(index, instanceID)
+                    if not encounterID then break end
+                    EJ_SelectEncounter(encounterID)
+                    local n = EJ_GetNumLoot() or 0
+                    Out("%s | %s (encounter %d): %d item(s)", tostring(instance.name), tostring(bossName), encounterID, n)
+                    for j = 1, n do
+                        local info = C_EncounterJournal.GetLootInfoByIndex(j)
+                        if type(info) == "table" and info.itemID then
+                            local setID = select(16, C_Item.GetItemInfo(info.itemID))
+                            if not info.name then uncached = uncached + 1 end
+                            items = items + 1
+                            Out("%s | %s | %d %s | slot=%s | set=%s", tostring(instance.name), tostring(bossName),
+                                info.itemID, info.name or "(uncached)", tostring(info.slot), tostring(setID))
+                        end
+                    end
+                    index = index + 1
+                end
+            end
+        end
+    end)
+    if EJ_SetDifficulty and oldDiff then pcall(EJ_SetDifficulty, oldDiff) end
+    if EJ_SetLootFilter and oldClass then pcall(EJ_SetLootFilter, oldClass, oldSpec or 0) end
+    if not ok then
+        Out("failed: %s", tostring(err))
+        print("|cff00ff00ThugUI:|r loot dump failed: " .. tostring(err))
+        return
+    end
+    print(string.format("|cff00ff00ThugUI:|r logged %d raid item(s)%s. /reload to save the log.", items,
+        uncached > 0 and string.format(", %d not cached yet: run it again in a few seconds", uncached) or ""))
 end
 
 return Seasonal

@@ -55,21 +55,26 @@ function Page:Build(host, panel)
     EditModeButton(panel)
 
     
-    panel:Dropdown{
-        label = "Bar",
-        options = function()
-            local opts = {}
-            for _, bar in ipairs(AB.BARS) do
-                table.insert(opts, { value = bar.key, text = bar.label })
-            end
-            return opts
-        end,
-        get = function() return Page.selectedKey or "MainActionBar" end,
-        set = function(v)
-            Page.selectedKey = v
-            ThugUI.Window:RefreshActivePage()
-        end,
-    }
+    
+    
+    local function BarDropdown()
+        return panel:Dropdown{
+            label = "Bar",
+            options = function()
+                local opts = {}
+                for _, bar in ipairs(AB.BARS) do
+                    table.insert(opts, { value = bar.key, text = bar.label })
+                end
+                return opts
+            end,
+            get = function() return Page.selectedKey or "MainActionBar" end,
+            set = function(v)
+                Page.selectedKey = v
+                ThugUI.Window:RefreshActivePage()
+            end,
+        }
+    end
+    BarDropdown()
 
     
     
@@ -267,6 +272,21 @@ function Page:Build(host, panel)
     panel:Note("Turning management off restores Blizzard's layout on the next "
         .. "/reload. The page lock is independent of management.")
 
+    
+    
+    local V = ThugUI.Visibility
+    if V and V.AddControls then
+        panel:Section("Visibility")
+        panel:Note("When this bar shows, on top of Edit Mode's own Bar Visible "
+            .. "setting. A faded bar still takes clicks and its keybinds still work. "
+            .. "Every bar shows in full while Edit Mode is open.")
+        BarDropdown()
+        V:AddControls(panel, function()
+            local info = AB.BarInfo(Page.selectedKey or "MainActionBar")
+            return info and info.vkey or "actionBar1"
+        end)
+    end
+
 end
 
 Page.selectedKey = "MainActionBar"
@@ -278,7 +298,7 @@ ThugUI.Window:RegisterPage{
     id = "actionbars",
     category = "combat",
     order = 30,
-    scopeKeys = { "ActionBars" },
+    scopeKeys = { "ActionBars", "Visibility" },
     summary = "Blizzard's bars in your rows and columns, with a page lock.",
     title = "Action Bars",
     build = function(host, panel) Page:Build(host, panel) end,

@@ -1,5 +1,22 @@
 # ThugUI
 
+## 2.3.0
+
+- Updated for the release of WoW Forever (1.60.1, build 70790). The game
+  now lives in `_forever_`, so install ThugUI to
+  `World of Warcraft\_forever_\Interface\AddOns`.
+- New: the Action Bars page has a Visibility tab. Each bar can show only in
+  combat or fade out of combat, on its own. Edit Mode shows every bar in
+  full, and controller mode leaves the bars alone.
+- New: `/thugseason loot` records the season raid bosses' loot to the debug
+  log.
+- Fixed: mouseover casts now land on party, target and target-of-target
+  frames, and those frames work with click-casting addons.
+- Fixed: a target or target of target picked up mid-fight is clickable at
+  once.
+- Fixed: on Retail, chat could sit in the wrong place after login or
+  `/reload` until you cycled its mode.
+
 ## 2.2.2
 
 - Updated for Retail 12.1.5 (Interface 120105).

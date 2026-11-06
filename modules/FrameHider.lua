@@ -36,8 +36,6 @@ FrameHider.Cfg = Cfg
 
 
 
-
-
 local pendingHides = {}
 local regenWatcher
 

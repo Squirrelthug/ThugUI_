@@ -638,6 +638,18 @@ local function SetChatExtrasHidden(hidden)
 end
 CS.SetChatExtrasHidden = SetChatExtrasHidden  
 
+
+
+
+
+
+local function PlaceChatFrame1()
+    if ChatFrame1 and anchorFrame then
+        ChatFrame1:ClearAllPoints()
+        ChatFrame1:SetPoint("TOPLEFT", anchorFrame, "BOTTOMLEFT", 0, -10)
+    end
+end
+
 function CS:SetChatMode(mode)
     
     
@@ -650,11 +662,8 @@ function CS:SetChatMode(mode)
 
         if mode == CHAT_MODE_NORMAL then
             
-            if chatFrame1 then
-                chatFrame1:Show()
-                chatFrame1:ClearAllPoints()
-                chatFrame1:SetPoint("TOPLEFT", anchorFrame, "BOTTOMLEFT", 0, -10)
-            end
+            if chatFrame1 then chatFrame1:Show() end
+            PlaceChatFrame1()
             if dock then dock:Show() end
             if streamChatFrame then streamChatFrame:Hide() end
             SetChatExtrasHidden(false)
@@ -662,6 +671,7 @@ function CS:SetChatMode(mode)
         elseif mode == CHAT_MODE_STREAM then
             
             if chatFrame1 then chatFrame1:Hide() end
+            PlaceChatFrame1()
             if dock then dock:Hide() end
             SetChatExtrasHidden(true)
 
@@ -672,6 +682,7 @@ function CS:SetChatMode(mode)
         elseif mode == CHAT_MODE_HIDDEN then
             
             if chatFrame1 then chatFrame1:Hide() end
+            PlaceChatFrame1()
             if dock then dock:Hide() end
             if streamChatFrame then streamChatFrame:Hide() end
             SetChatExtrasHidden(true)
@@ -733,13 +744,47 @@ end
 function CS:UpdateAnchors()
     QueueCombatAction(function()
         PlaceAnchor()
-        if dbChat.mode == CHAT_MODE_NORMAL and ChatFrame1 then
-            ChatFrame1:ClearAllPoints()
-            ChatFrame1:SetPoint("TOPLEFT", anchorFrame, "BOTTOMLEFT", 0, -10)
-        elseif dbChat.mode == CHAT_MODE_STREAM and streamChatFrame then
+        
+        PlaceChatFrame1()
+        if dbChat.mode == CHAT_MODE_STREAM and streamChatFrame then
             AnchorStream()
         end
     end)
+end
+
+
+
+
+
+
+
+
+
+function CS:RefreshPlacement(reason)
+    self:SetChatMode(dbChat.mode or CHAT_MODE_NORMAL)
+    self:UpdateAnchors()
+end
+
+
+
+
+local DEFERRED_REFRESH_DELAYS = { 0.5, 2 }
+
+
+
+local refreshGeneration = 0
+
+
+
+
+local function NoteChatMoved(event, delay)
+    local D = ThugUI.Diagnostics
+    if not D or not ChatFrame1 or not anchorFrame then return end
+    local ok, _, relativeTo = pcall(ChatFrame1.GetPoint, ChatFrame1, 1)
+    if ok and relativeTo == anchorFrame then return end
+    D:LogOnce("chatmoved:" .. tostring(event) .. ":" .. tostring(delay), "CHAT",
+        "ChatFrame1 moved off the chat anchor after %s; re-anchored at +%ss",
+        tostring(event), tostring(delay))
 end
 
 
@@ -940,9 +985,25 @@ function CS:Initialize()
     local initFrame = CreateFrame("Frame")
     initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     initFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
-    initFrame:SetScript("OnEvent", function()
-        CS:SetChatMode(dbChat.mode or CHAT_MODE_NORMAL)
-        CS:UpdateAnchors()
+    
+    
+    ThugUI.SafeRegisterEvent(initFrame, "UPDATE_CHAT_WINDOWS")
+    initFrame:SetScript("OnEvent", function(_, event)
+        CS:RefreshPlacement(event)
+        
+        
+        
+        
+        refreshGeneration = refreshGeneration + 1
+        local generation = refreshGeneration
+        for _, delay in ipairs(DEFERRED_REFRESH_DELAYS) do
+            C_Timer.After(delay, function()
+                if generation ~= refreshGeneration then return end
+                if not ThugUI:IsModuleOn("chatstream") then return end
+                NoteChatMoved(event, delay)
+                CS:RefreshPlacement(event)
+            end)
+        end
     end)
     CS.initFrame = initFrame
 

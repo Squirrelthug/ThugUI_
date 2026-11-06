@@ -12,6 +12,17 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 local ThugUI = _G.ThugUI
 local CT = {}
 ThugUI.ControllerTarget = CT
@@ -634,6 +645,122 @@ end
 
 local SHADE_UNLOCKED = { 0.8, 0.05, 0.05, 0.5 }
 
+
+local clicks = {}
+CT.clicks = clicks
+local watched = {}
+CT.watched = watched
+local pendingClicks = false
+local watchUnavailable = false
+
+local function WatchUnavailable(err)
+    if watchUnavailable then return end
+    watchUnavailable = true
+    local D = ThugUI.Diagnostics
+    if D and D.LogOnce then
+        D:LogOnce("ct-unit-watch-" .. tostring(err), "CLICKS", "RegisterUnitWatch unavailable: %s; using manual clicks", tostring(err))
+    elseif D and D.Log then
+        D:Log("CLICKS", "RegisterUnitWatch unavailable: %s; using manual clicks", tostring(err))
+    end
+end
+
+
+
+function CT._ResetWatchForTests()
+    watchUnavailable = false
+end
+
+local function ClickButton(key)
+    if clicks[key] then return clicks[key] end
+    if InCombatLockdown() then return nil end
+    local f = frames[key]
+    local b = CreateFrame("Button", key == "target" and "ThugUI_CTargetClick" or "ThugUI_CTargetTargetClick",
+        UIParent, "SecureActionButtonTemplate")
+    b:RegisterForClicks("AnyDown", "AnyUp")
+    b:SetAttribute("useOnKeyDown", true)
+    b:SetAttribute("type1", "macro")
+    b:SetAttribute("macrotext1", "/target " .. f.unit)
+    b:SetFrameStrata("LOW")
+    b:SetFrameLevel(f:GetFrameLevel() + 10)
+    b.unit = f.unit
+    
+    
+    
+    b:HookScript("OnEnter", function(self)
+        if GameTooltip_SetDefaultAnchor and UnitExists(self.unit) then
+            GameTooltip_SetDefaultAnchor(GameTooltip, self)
+            pcall(GameTooltip.SetUnit, GameTooltip, self.unit)
+            GameTooltip:Show()
+        end
+    end)
+    b:HookScript("OnLeave", function() GameTooltip:Hide() end)
+    b:HookScript("OnClick", function(self, button, down)
+        if button == "RightButton" and not down and ThugUI.UnitMenuWindow then
+            ThugUI.UnitMenuWindow:Open(self.unit, self)
+        end
+    end)
+    if type(_G.ClickCastFrames) == "table" then _G.ClickCastFrames[b] = true end
+    b:Hide()
+    clicks[key] = b
+    return b
+end
+
+
+
+local function PlaceClick(b, f)
+    local l, bt, w, h = f:GetRect()
+    b:ClearAllPoints()
+    if not l then b:SetSize(0, 0) b:SetPoint("CENTER", UIParent, "CENTER") return end
+    local k = f:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l * k, bt * k)
+    b:SetSize(w * k, h * k)
+end
+
+function CT:SyncClicks()
+    if InCombatLockdown() then pendingClicks = true return end
+    pendingClicks = false
+    local c = Cfg()
+    local hasTarget = UnitExists("target")
+    if issecretvalue and issecretvalue(hasTarget) then hasTarget = true end
+    for _, key in ipairs({ "target", "tot" }) do
+        local f = frames[key]
+        local want = f and CT:IsActive() and c[key] and c[key].enabled and not c.unlocked
+        if watchUnavailable then want = want and hasTarget end
+        local b = want and ClickButton(key) or clicks[key]
+        if b then
+            if want then
+                b:SetAttribute("unit", f.unit)
+                b:SetAttribute("macrotext1", "/target " .. f.unit)
+                PlaceClick(b, f)
+                if not watched[b] and not watchUnavailable then
+                    local ok, err = pcall(RegisterUnitWatch, b)
+                    if ok then watched[b] = true else WatchUnavailable(err) end
+                end
+                
+                if not watched[b] then
+                    if watchUnavailable and not hasTarget then
+                        b:SetAttribute("unit", nil)
+                        b:Hide()
+                    else
+                        b:Show()
+                    end
+                end
+            else
+                
+                
+                
+                
+                if watched[b] then
+                    pcall(UnregisterUnitWatch, b)
+                    watched[b] = nil
+                end
+                b:SetAttribute("unit", nil)
+                b:Hide()
+            end
+        end
+    end
+end
+
 local function ApplyShade(f, key, unlocked)
     if not (f and f.shade) then return end
     if unlocked then
@@ -714,6 +841,8 @@ function CT:Layout(key)
     end
     
     UpdateUnit(f, key)
+    
+    self:SyncClicks()
 end
 
 
@@ -731,6 +860,7 @@ function CT:SetUnlocked(unlocked)
         end
         UpdateUnit(frames[key], key)
     end
+    self:SyncClicks()
 end
 
 function CT:ApplyAll()
@@ -760,6 +890,7 @@ driver:SetScript("OnEvent", function(self, event, unit)
         if pendingParking then CT:ApplyParking() end
         if frames["target"] then UpdateUnit(frames["target"], "target") end
         if frames["tot"] then UpdateUnit(frames["tot"], "tot") end
+        CT:SyncClicks()
     elseif event == "PLAYER_ENTERING_WORLD" then
         
         
@@ -772,6 +903,7 @@ driver:SetScript("OnEvent", function(self, event, unit)
     elseif event == "PLAYER_TARGET_CHANGED" or event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ROLES_ASSIGNED" then
         if frames["target"] then UpdateUnit(frames["target"], "target") end
         if frames["tot"] then UpdateUnit(frames["tot"], "tot") end
+        if event == "PLAYER_TARGET_CHANGED" then CT:SyncClicks() end
     elseif event == "UNIT_TARGET" then
         if frames["tot"] then UpdateUnit(frames["tot"], "tot") end
     elseif BAR_EVENTS[event] then

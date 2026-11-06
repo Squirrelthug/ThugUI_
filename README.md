@@ -31,7 +31,7 @@ controller, and the two get the same features.
 
 Download the zip from [Releases](../../releases) or CurseForge, and extract the
 `ThugUI` folder into `World of Warcraft\_retail_\Interface\AddOns` (or
-`_classic_beta_` for WoW Forever). `/thugui` opens the settings. What changed
+`_forever_` for WoW Forever). `/thugui` opens the settings. What changed
 in each version is in the release notes.
 
 ## Feedback

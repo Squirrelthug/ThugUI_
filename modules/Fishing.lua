@@ -490,4 +490,3 @@ function F:Initialize()
     pcall(self.RegisterUnitEvent, self, "UNIT_SPELLCAST_CHANNEL_STOP", "player")
     RestoreFishingSounds()
 end
-

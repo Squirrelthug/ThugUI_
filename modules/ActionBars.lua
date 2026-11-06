@@ -6,6 +6,7 @@
 
 
 
+
 ThugUI = ThugUI or {}
 
 local AB = {}
@@ -17,15 +18,16 @@ ThugUI.ActionBars = AB
 
 
 
+
 AB.BARS = {
-    { key = "MainActionBar",       label = "Action Bar 1 (main)" },
-    { key = "MultiBarBottomLeft",  label = "Action Bar 2", setting = "PROXY_SHOW_ACTIONBAR_2" },
-    { key = "MultiBarBottomRight", label = "Action Bar 3", setting = "PROXY_SHOW_ACTIONBAR_3" },
-    { key = "MultiBarRight",       label = "Action Bar 4", setting = "PROXY_SHOW_ACTIONBAR_4" },
-    { key = "MultiBarLeft",        label = "Action Bar 5", setting = "PROXY_SHOW_ACTIONBAR_5" },
-    { key = "MultiBar5",           label = "Action Bar 6", setting = "PROXY_SHOW_ACTIONBAR_6" },
-    { key = "MultiBar6",           label = "Action Bar 7", setting = "PROXY_SHOW_ACTIONBAR_7" },
-    { key = "MultiBar7",           label = "Action Bar 8", setting = "PROXY_SHOW_ACTIONBAR_8" },
+    { key = "MainActionBar",       label = "Action Bar 1 (main)", vkey = "actionBar1" },
+    { key = "MultiBarBottomLeft",  label = "Action Bar 2", setting = "PROXY_SHOW_ACTIONBAR_2", vkey = "actionBar2" },
+    { key = "MultiBarBottomRight", label = "Action Bar 3", setting = "PROXY_SHOW_ACTIONBAR_3", vkey = "actionBar3" },
+    { key = "MultiBarRight",       label = "Action Bar 4", setting = "PROXY_SHOW_ACTIONBAR_4", vkey = "actionBar4" },
+    { key = "MultiBarLeft",        label = "Action Bar 5", setting = "PROXY_SHOW_ACTIONBAR_5", vkey = "actionBar5" },
+    { key = "MultiBar5",           label = "Action Bar 6", setting = "PROXY_SHOW_ACTIONBAR_6", vkey = "actionBar6" },
+    { key = "MultiBar6",           label = "Action Bar 7", setting = "PROXY_SHOW_ACTIONBAR_7", vkey = "actionBar7" },
+    { key = "MultiBar7",           label = "Action Bar 8", setting = "PROXY_SHOW_ACTIONBAR_8", vkey = "actionBar8" },
 }
 
 
@@ -168,13 +170,58 @@ function AB:ApplyMainVisibility()
     if type(bar.ActionBarPageNumber) == "table" then
         ParkContainer(bar.ActionBarPageNumber, hide, bar)
     end
-    bar:SetAlpha(hide and 0 or 1)
     mainHiddenApplied = hide
+    
+    self:ApplyBarAlpha("MainActionBar")
     if ThugUI.Diagnostics then
         ThugUI.Diagnostics:Log("ACTIONBARS", "MainActionBar %s", hide and "hidden" or "shown")
     end
     
     if not hide then self:ApplyLayout("MainActionBar") end
+end
+
+
+
+local alphaTouched = {}
+local editModeActive = false
+
+
+
+
+
+
+
+
+
+
+
+function AB:ApplyBarAlpha(key)
+    local info = AB.BarInfo(key)
+    local bar = _G[key]
+    if not info or not bar or type(bar.SetAlpha) ~= "function" then return end
+    local V = ThugUI.Visibility
+    local inController = ThugUI.ControllerMode and ThugUI.ControllerMode.IsActive
+        and ThugUI.ControllerMode:IsActive()
+    local alpha = 1
+    if key == "MainActionBar" and mainHiddenApplied then
+        alpha = 0
+    elseif V and info.vkey and not editModeActive and not inController
+        and ThugUI:IsModuleOn("actionbars") then
+        alpha = V:CurrentAlpha(info.vkey)
+    end
+    if alpha == 1 and not alphaTouched[key] then return end
+    bar:SetAlpha(alpha)
+    alphaTouched[key] = alpha ~= 1 or nil
+end
+
+function AB:ApplyAllBarAlpha()
+    for _, b in ipairs(AB.BARS) do self:ApplyBarAlpha(b.key) end
+end
+
+
+function AB:SetEditModeActive(active)
+    editModeActive = active and true or false
+    self:ApplyAllBarAlpha()
 end
 
 function AB.BarInfo(key)
@@ -761,6 +808,21 @@ function AB:Initialize()
         V:Register("bagBar", function() AB.UpdateVisibilityFrames() end)
 
         AB.UpdateVisibilityFrames()
+
+        for _, b in ipairs(AB.BARS) do
+            local key = b.key
+            V:Register(b.vkey, function() AB:ApplyBarAlpha(key) end)
+        end
+        if EventRegistry and EventRegistry.RegisterCallback then
+            EventRegistry:RegisterCallback("EditMode.Enter", function() AB:SetEditModeActive(true) end, AB)
+            EventRegistry:RegisterCallback("EditMode.Exit", function() AB:SetEditModeActive(false) end, AB)
+        end
+        
+        local CM = ThugUI.ControllerMode
+        if CM and CM.RegisterCallback then
+            CM:RegisterCallback(function() AB:ApplyAllBarAlpha() end)
+        end
+        AB:ApplyAllBarAlpha()
     end
 end
 
@@ -768,6 +830,7 @@ if ThugUI.Visibility and ThugUI.Visibility.KEYS then
     ThugUI.Visibility.KEYS.statusBar = true
     ThugUI.Visibility.KEYS.microMenu = true
     ThugUI.Visibility.KEYS.bagBar = true
+    for _, b in ipairs(AB.BARS) do ThugUI.Visibility.KEYS[b.vkey] = true end
 end
 
 ThugUI:RegisterModule("ActionBars", AB)
