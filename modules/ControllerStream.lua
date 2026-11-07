@@ -21,6 +21,9 @@
 
 
 
+
+
+
 local ThugUI = _G.ThugUI
 local CS = {}
 ThugUI.ControllerStream = CS
@@ -36,6 +39,7 @@ ThugUI.defaults.ControllerStream = {
     fade = true,
     fadeAfter = 20,       
     maxLines = 100,
+    
     
     
     show = { say = true, whisper = true, party = true, raid = true, guild = true,
@@ -68,13 +72,16 @@ end
 
 
 
+
 function CS:Wants(category, channelName)
-    local c = self:Cfg()
-    if category == "channel" then
-        if c.allChannels then return true end
-        return channelName ~= nil and c.channels[channelName] and true or false
-    end
-    return c.show[category] and true or false
+    local GC = ThugUI.GamepadChat
+    return GC ~= nil and GC:ActiveTabShows(category, channelName)
+end
+
+
+
+function CS:OnTabChanged()
+    if smf then smf:Clear() end
 end
 
 

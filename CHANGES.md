@@ -1,5 +1,17 @@
 # ThugUI
 
+## 2.5.0
+
+- Changed: the controller chat stream shows whichever tab the chat window is
+  on. Change tab, close the window, and the stream follows, and it stays on
+  that tab after a reload. The stream's own What shows settings are gone.
+- Changed: the Chat stream settings are down to three tabs. Size & look and
+  Lines stay, and everything else moved onto one Visibility tab.
+- New: the controller chat opens in combat. L1/R1 and the D-pad change tabs
+  and scroll, and B closes it. Your buttons do not cast until it closes, and a
+  chat window left open still closes when combat starts.
+- New (WoW Forever): press the Back button twice for a screenshot.
+
 ## 2.4.0
 
 - New (WoW Forever, experimental): the Face buttons tile, next to Controller

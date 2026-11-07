@@ -168,6 +168,17 @@ PH:Register{ id = "radial-start", group = "GAMEPLAY", text = "ThugUI menu (press
     end }
 
 
+PH:Register{ id = "radial-screenshot", group = "GAMEPLAY", text = "Screenshot (press twice)",
+    keys = function()
+        local g = PH.Glyph("PADBACK")
+        return g .. " " .. g
+    end,
+    enabled = function()
+        local R = ThugUI.ControllerRadial
+        return R and R.IsListening and R:IsListening()
+    end }
+
+
 PH:Register{ id = "radial-binding", group = "GAMEPLAY", text = "ThugUI menu",
     keys = function() return PH.BindingGlyphs(GetBindingKey and GetBindingKey("THUGUI_WHEEL")) end,
     enabled = function()

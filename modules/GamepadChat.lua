@@ -17,6 +17,8 @@
 
 
 
+
+
 local ThugUI = _G.ThugUI
 local GamepadChat = {}
 ThugUI.GamepadChat = GamepadChat
@@ -36,6 +38,9 @@ ThugUI.defaults.GamepadChat = {
     fadeIdle = false,
     fadeAfter = 20,
     enabled = true,   
+    
+    
+    activeTab = "All",
 }
 
 local GC = GamepadChat
@@ -129,6 +134,15 @@ local function ChatFont()
     return FALLBACK_FONT, ""
 end
 
+
+
+local function TabShows(tab, category, channelName)
+    if tab.all then return true end
+    if tab.show and tab.show[category] then return true end
+    if channelName and tab.channels and tab.channels[channelName] then return true end
+    return false
+end
+
 local function UpdateTabVisibility()
     for _, tab in ipairs(GC.liveTabs) do
         if tab.name == activeTab then
@@ -143,6 +157,17 @@ local function UpdateTabVisibility()
             end
         end
     end
+end
+
+
+
+
+
+local function SetActiveTab(name, save)
+    local changed = activeTab ~= name
+    activeTab = name
+    if save ~= false then ThugUIDB.GamepadChat.activeTab = name end
+    if changed and ThugUI.ControllerStream then ThugUI.ControllerStream:OnTabChanged() end
 end
 
 
@@ -241,7 +266,7 @@ function GC:RebuildTabs()
         tab.label:SetText(tData.name)
         tab.btn:SetWidth(tab.label:GetStringWidth() + 16)
         tab.btn:SetScript("OnClick", function()
-            activeTab = tab.name
+            SetActiveTab(tab.name)
             tab.unread = false
             UpdateTabVisibility()
         end)
@@ -269,7 +294,7 @@ function GC:RebuildTabs()
         end
     end
 
-    if not activeTabExists then activeTab = "All" end
+    if not activeTabExists then SetActiveTab("All", false) end
     UpdateTabVisibility()
 end
 
@@ -280,6 +305,12 @@ local function ActiveTabObject()
     end
 end
 GC.ActiveTabObject = ActiveTabObject
+
+
+function GC:ActiveTabShows(category, channelName)
+    local tab = ActiveTabObject()
+    return tab ~= nil and TabShows(tab, category, channelName)
+end
 
 
 
@@ -375,16 +406,7 @@ local function RouteMessage(text, r, g, b, infoID)
     local handledChannel = false
 
     for _, tab in ipairs(GC.liveTabs) do
-        local showLine = false
-        if tab.all then
-            showLine = true
-        elseif tab.show and tab.show[category] then
-            showLine = true
-        elseif channelName and tab.channels and tab.channels[channelName] then
-            showLine = true
-        end
-        
-        if showLine then
+        if TabShows(tab, category, channelName) then
             tab.smf:AddMessage(outText, r or 1, g or 1, b or 1)
             if activeTab ~= tab.name then
                 tab.unread = true
@@ -569,8 +591,57 @@ local function SetupHooks()
 end
 
 
+
+
+
+
+
+function GC:ArmInput()
+    local pad = GC.padFrame
+    if not pad or not pad.EnableGamePadButton then return false end
+    if InCombatLockdown() then return GC:InputReady() end
+    local okProp = pcall(pad.SetPropagateKeyboardInput, pad, false)
+    local okButton = pcall(pad.EnableGamePadButton, pad, true)
+    GC.inputArmed = okProp and okButton
+    GC.padPropagating = false
+    return GC.inputArmed
+end
+
+
+
+
+function GC:InputReady()
+    return GC.inputArmed == true and not GC.padPropagating
+end
+
+function GC:OnWindowShown()
+    local fight = InCombatLockdown()
+    if not fight then GC:ArmInput() end
+    GC.padFrame:SetShown(not (fight and GC.window.openedByTyping))
+end
+
+function GC:OnWindowHidden()
+    if not InCombatLockdown() then GC:ArmInput() end
+end
+
+local function MayOpen()
+    if not ThugUI.CombatClose:Allow("chat") then return false end
+    if InCombatLockdown() and not GC:InputReady() then
+        if UIErrorsFrame and UIErrorsFrame.AddMessage then
+            UIErrorsFrame:AddMessage("Not in combat.", 1, 0.1, 0.1, 1)
+        end
+        if ThugUI.Diagnostics then
+            ThugUI.Diagnostics:Log("CHAT", "open in combat refused: armed=%s propagating=%s",
+                tostring(GC.inputArmed), tostring(GC.padPropagating))
+        end
+        return false
+    end
+    return true
+end
+
+
 function GC:Open()
-    if not ThugUI.CombatClose:Allow("chat") then return end
+    if not MayOpen() then return end
     if not GC.window or GC.window:IsShown() then return end
     GC.window.openedByTyping = false
     GC.window:Show()
@@ -663,7 +734,7 @@ function GC:Toggle()
     if GC.window:IsShown() then
         GC.window:Hide()
     else
-        if not ThugUI.CombatClose:Allow("chat") then return end
+        if not MayOpen() then return end
         GC.window.openedByTyping = false
         GC.window:Show()
         GC:UpdateSettings()
@@ -680,6 +751,7 @@ function GC:Apply(active)
     end
     if active then
         SetupHooks()
+        GC:ArmInput()
         GC:HookShortcuts()
         GC:HookRadialChat()
         CheckCHAT_FRAMES()
@@ -702,6 +774,10 @@ function GC:Apply(active)
             if _G[name] then _G[name]:Show() end
         end
         GC.window:Hide()
+        if not InCombatLockdown() and GC.padFrame and GC.padFrame.EnableGamePadButton then
+            pcall(GC.padFrame.EnableGamePadButton, GC.padFrame, false)
+            GC.inputArmed = false
+        end
         
         for editBox, orig in pairs(editBoxOriginals) do
             if editBox:GetParent() == GC.window.editContainer then
@@ -727,13 +803,12 @@ local function CycleTab(step)
     end
     idx = idx + step
     if idx < 1 then idx = #GC.liveTabs elseif idx > #GC.liveTabs then idx = 1 end
-    activeTab = GC.liveTabs[idx].name
+    SetActiveTab(GC.liveTabs[idx].name)
     GC.liveTabs[idx].unread = false
     UpdateTabVisibility()
 end
 
 local function WindowPad(self, button)
-    if InCombatLockdown() then return end
     local handled = false
     if button == (GAMEPAD_SHOULDER_LEFT or "PADLSHOULDER") or button == (GAMEPAD_DPAD_LEFT or "PADDLEFT") then
         CycleTab(-1)
@@ -763,11 +838,11 @@ local function WindowPad(self, button)
         end
     end
     
-    if not handled then
-        self:SetPropagateKeyboardInput(true)
-    else
-        self:SetPropagateKeyboardInput(false)
-    end
+    
+    
+    if InCombatLockdown() then return end
+    self:SetPropagateKeyboardInput(not handled)
+    GC.padPropagating = not handled
 end
 
 function GC:Initialize()
@@ -780,7 +855,8 @@ function GC:Initialize()
     local w = CreateFrame("Frame", "ThugUI_GamepadChatFrame", UIParent)
     GC.window = w
     if ThugUI.CombatClose then
-        ThugUI.CombatClose:Register("chat", function() return GC.window and GC.window:IsShown() end, function() GC.window:Hide() end)
+        ThugUI.CombatClose:Register("chat", function() return GC.window and GC.window:IsShown() end,
+            function() GC.window:Hide() end, { reopenInCombat = true })
     end
     w:SetFrameStrata("DIALOG")
     w:SetSize(ThugUIDB.GamepadChat.width, ThugUIDB.GamepadChat.height)
@@ -855,6 +931,7 @@ function GC:Initialize()
     end
     GC.sessionTabs = {}
     GC.sessionChannels = {}
+    activeTab = ThugUIDB.GamepadChat.activeTab or "All"
     GC:RebuildTabs()
     
     local toast = CreateFrame("Button", "ThugUI_GamepadChatToast", UIParent)
@@ -880,7 +957,7 @@ function GC:Initialize()
         end
         for _, tab in ipairs(GC.liveTabs or {}) do
             if not tab.all and tab.show and tab.show.whisper then
-                activeTab = tab.name
+                SetActiveTab(tab.name)
                 tab.unread = false
                 break
             end
@@ -896,30 +973,26 @@ function GC:Initialize()
         end
     end)
     
-    w:SetScript("OnShow", function(self)
-        if not InCombatLockdown() then
-            if self.EnableGamePadButton then pcall(self.EnableGamePadButton, self, true) end
-            self:SetPropagateKeyboardInput(false)
-        end
-    end)
-    w:SetScript("OnHide", function(self)
-        if not InCombatLockdown() then
-            if self.EnableGamePadButton then pcall(self.EnableGamePadButton, self, false) end
-        end
-    end)
-    w:SetScript("OnGamePadButtonDown", WindowPad)
+    
+    local pad = CreateFrame("Frame", nil, w)
+    GC.padFrame = pad
+    pad:SetAllPoints()
+    pad:SetScript("OnGamePadButtonDown", WindowPad)
+
+    w:SetScript("OnShow", function() GC:OnWindowShown() end)
+    w:SetScript("OnHide", function() GC:OnWindowHidden() end)
     
     ThugUI.SafeRegisterEvent(w, "PLAYER_REGEN_DISABLED")
     ThugUI.SafeRegisterEvent(w, "PLAYER_REGEN_ENABLED")
     ThugUI.SafeRegisterEvent(w, "UI_ERROR_MESSAGE")
     w:HookScript("OnEvent", function(self, event, arg1, arg2)
         if event == "PLAYER_REGEN_DISABLED" then
-            if self.EnableGamePadButton then pcall(self.EnableGamePadButton, self, false) end
+            
+            
+            if GC.active and not InCombatLockdown() then GC:ArmInput() end
         elseif event == "PLAYER_REGEN_ENABLED" then
-            if self:IsShown() then
-                if self.EnableGamePadButton then pcall(self.EnableGamePadButton, self, true) end
-                self:SetPropagateKeyboardInput(false)
-            end
+            if GC.active then GC:ArmInput() end
+            if self:IsShown() then pad:Show() end
         elseif event == "UI_ERROR_MESSAGE" then
             if arg2 then AddToCategory("system", arg2, 1, 0.1, 0.1) end
         end

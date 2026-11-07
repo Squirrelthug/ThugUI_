@@ -600,8 +600,9 @@ local function Build(panel)
     
     
     panel:SubSection("Size & look")
-    panel:Note("Recent chat lines while the controller chat window is closed; it hides while the "
-        .. "window is open. Tick Unlock to drag it into place. Separate from the chat acorn's stream.")
+    panel:Note("Recent lines from the chat window's current tab, shown while that window is closed; "
+        .. "it hides while the window is open. Change tab in the window to change what the stream shows. "
+        .. "Tick Unlock to drag it into place. Separate from the chat acorn's stream.")
     panel:Part("Size & position")
     panel:Slider{
         label = "Stream width",
@@ -646,45 +647,18 @@ local function Build(panel)
         get = function() return SCfg().fadeAfter or 20 end,
         set = function(v) SCfg().fadeAfter = v; SApply() end,
     }
-    panel:SubSection("What shows")
-    panel:Part("Content")
-    for _, cat in ipairs(CATEGORIES) do
-        local id = cat.id
-        panel:Checkbox{
-            label = "Stream: " .. cat.title,
-            tooltip = cat.tip,
-            get = function() return SCfg().show and SCfg().show[id] end,
-            set = function(v) SCfg().show = SCfg().show or {}; SCfg().show[id] = v and true or false end,
-        }
-    end
-    panel:Checkbox{
-        label = "Stream: every channel (Trade, General...)",
-        tooltip = "Off: only the channels ticked below.",
-        get = function() return SCfg().allChannels ~= false end,
-        set = function(v) SCfg().allChannels = v and true or false end,
-    }
-    local okList, list = pcall(function() return { GetChannelList() } end)
-    if okList and type(list) == "table" then
-        
-        
-        for i = 2, #list, 3 do
-            local name = list[i]
-            if type(name) == "string" and not (issecretvalue and issecretvalue(name)) then
-                panel:Checkbox{
-                    label = "Stream channel: " .. name,
-                    get = function() return SCfg().channels and SCfg().channels[name] end,
-                    set = function(v) SCfg().channels = SCfg().channels or {}; SCfg().channels[name] = v and true or nil end,
-                }
-            end
-        end
-    end
+    
+    
+    
     
     
     
     if ThugUI.Visibility then
-        ThugUI.Visibility:AddControls(panel, "controllerStream", { split = true, moving = true, padReveal = true,
+        panel:SubSection("Visibility")
+        panel:Part("Visibility")
+        ThugUI.Visibility:AddControls(panel, "controllerStream", { moving = true, padReveal = true,
             afterWhen = function(p)
-                p:Group("Stream rules (these win over everything on these tabs)")
+                p:Group("Stream rules (these win over everything on this tab)")
                 p:Checkbox{
                     label = "Always show in combat",
                     tooltip = "In combat the stream is fully shown, whatever Show, resting, moving or gamepad input would hide.",

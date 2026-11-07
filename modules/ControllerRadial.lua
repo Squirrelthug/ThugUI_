@@ -1509,6 +1509,30 @@ function ControllerRadial:OnStart()
     end
 end
 
+
+
+
+
+
+
+
+
+local PAD_SCREENSHOT = "PADBACK"
+local lastBack = nil
+
+function ControllerRadial:OnBack()
+    local now = GetTime()
+    if lastBack and now - lastBack <= DOUBLE_TAP then
+        lastBack = nil
+        C_Timer.After(0, function()
+            local ok, err = pcall(Screenshot)
+            Log("screenshot by double press: %s", ok and "taken" or tostring(err))
+        end)
+    else
+        lastBack = now
+    end
+end
+
 local listener
 
 
@@ -1534,6 +1558,8 @@ function ControllerRadial:StartListener()
                 ControllerRadial:Open()
             elseif ControllerRadial:IsStart(button) then
                 ControllerRadial:OnStart()
+            elseif button == PAD_SCREENSHOT then
+                ControllerRadial:OnBack()
             end
         end)
         listener:SetScript("OnGamePadButtonUp", function(_, button) held[button] = nil end)

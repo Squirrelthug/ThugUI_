@@ -6,6 +6,7 @@
 
 
 
+
 local ThugUI = _G.ThugUI
 local CC = {}
 ThugUI.CombatClose = CC
