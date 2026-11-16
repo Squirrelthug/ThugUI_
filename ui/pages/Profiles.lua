@@ -37,6 +37,57 @@ local REASONS = {
     same = "that is already this profile",
 }
 
+
+
+local function PageTitles()
+    local titles, sole = {}, {}
+    for _, def in ipairs(ThugUI.Window and ThugUI.Window.pages or {}) do
+        for _, key in ipairs(def.scopeKeys or {}) do
+            local only = #def.scopeKeys == 1
+            if titles[key] == nil or (only and not sole[key]) then
+                titles[key] = def.title
+                sole[key] = only
+            end
+        end
+    end
+    return titles
+end
+
+
+
+
+function Page:ReadablePath(path, titles)
+    titles = titles or PageTitles()
+    local root, rest = tostring(path):match("^(%a+)%.(.+)$")
+    if root ~= "db" then return rest or tostring(path) end
+    local key, inner = rest:match("^([^%.]+)%.?(.*)$")
+    local base = key:match("^(.+)" .. ThugUI.Profiles.PAD_SUFFIX .. "$")
+    local name
+    if titles[key] then
+        name = titles[key]
+    elseif base and titles[base] then
+        name = titles[base] .. " (controller)"
+    else
+        name = key
+    end
+    return inner ~= "" and (name .. " > " .. inner) or name
+end
+
+
+function Page:ReportText(report)
+    if type(report) ~= "table" then return "" end
+    local lines = { ("Imported %d settings from a schema %d string."):format(report.imported or 0, report.fromSchema or 1) }
+    local skipped = report.skipped or {}
+    if #skipped > 0 then
+        lines[#lines + 1] = ("%d skipped:"):format(#skipped)
+        local titles = PageTitles()
+        for _, r in ipairs(skipped) do
+            lines[#lines + 1] = ("%s: %s"):format(Page:ReadablePath(r.path, titles), tostring(r.reason))
+        end
+    end
+    return table.concat(lines, "\n")
+end
+
 function Page:Build(host, panel)
     local P = ThugUI.Profiles
     if not P then return end
@@ -219,8 +270,9 @@ function Page:Build(host, panel)
     panel:Section("Share")
     panel:Note(("Share your setup as a line of text, or bring in someone else's. A string starts with THUG, "
         .. "the version's first number and the game: THUG%dR: is retail, THUG%dF: is WoW Forever. It imports "
-        .. "only into the same game and the same first number. Importing always makes a new profile; "
-        .. "nothing of yours is replaced."):format(P.Major(), P.Major()))
+        .. "into the same game and any newer ThugUI; a string from a newer ThugUI than yours is refused. "
+        .. "Importing always makes a new profile; nothing of yours is replaced, and anything an older "
+        .. "string held that no longer fits is skipped and listed below."):format(P.Major(), P.Major()))
     
     
     panel:Note(("Your layout also depends on Blizzard's Edit Mode. Share that too: in Edit Mode, open the "
@@ -267,15 +319,24 @@ function Page:Build(host, panel)
         label = "Import as a new profile",
         width = 200,
         onClick = function()
-            local name, reason, major = P:Import(Page.importText, Page.importName)
+            local name, reason, extra = P:Import(Page.importText, Page.importName)
             if not name then
-                Warn(P:ShareReasonText(reason, major))
+                Warn(P:ShareReasonText(reason, extra))
                 return
             end
             Page.importText, Page.importName = "", ""
+            Page.importReport = Page:ReportText(reason)
             Page:Refresh()
             ThugUI.Dialog:Show("THUGUI_PROFILE_IMPORTED", name, nil, name)
         end,
+    }
+
+    
+    
+    Page.widgets.importReport = panel:TextArea{
+        label = "Last import:",
+        height = 90, readOnly = true,
+        get = function() return Page.importReport or "" end,
     }
 
     

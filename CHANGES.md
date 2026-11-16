@@ -1,5 +1,34 @@
 # ThugUI
 
+## 2.6.0
+
+- New (WoW Forever, controller, experimental): the Full-screen inventory
+  tile, off by default. Opening your bags or the character sheet shows one
+  full-screen window instead: your character on the left, your bags on the
+  right, and a large info panel in the middle in place of tooltips.
+  - The character side has Gear, Stats and Upkeep tabs, switched with L1/R1.
+    Gear shows your 3D character, the item level on each slot, and a warning
+    dot when durability is low.
+  - Moving onto gear in your bags shows what you wear in that slot beneath it.
+  - X uses or equips, and Y opens a menu: split a stack, link it in chat,
+    compare, or destroy, with Cancel picked first. Anything the game would
+    refuse is dimmed, with the reason in plain words.
+  - Bags: X on a bag puts it in an empty bag slot. A on a bag slot lets you
+    pick a bag or remove one.
+  - The D-pad moves through a whole side, from the paper doll into the armor
+    chest and through the bags, the reagent strip and the bag slots. L2/R2
+    switch sides.
+  - The game's own popups (such as "this will bind it to you") show in the
+    info panel, with the button that answers each option.
+  - A framed look is drawn from stand-in art for now. Switch it off on the
+    tile's page for plain panels.
+- New: choosing a gear quest reward shows what you wear in that slot right
+  above its tooltip, or says that nothing is equipped there.
+- Changed: profile strings carry a settings version. A string from an older
+  ThugUI, including an older major version, imports into a newer one. Any
+  setting that no longer fits is skipped and listed after the import. A
+  string from a newer ThugUI asks you to update first.
+
 ## 2.5.0
 
 - Changed: the controller chat stream shows whichever tab the chat window is

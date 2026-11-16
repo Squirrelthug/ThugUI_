@@ -37,12 +37,13 @@ local GLYPH_FALLBACK = {
 }
 
 
-function PH.Glyph(key)
+
+function PH.Glyph(key, size)
     local util = _G.InputIconTextureSetUtility
     if util and util.GetNormalActiveInputIconButtonTexture and CreateAtlasMarkup then
         local ok, atlas = pcall(util.GetNormalActiveInputIconButtonTexture, key)
         if ok and type(atlas) == "string" and atlas ~= "" then
-            return CreateAtlasMarkup(atlas, GLYPH, GLYPH)
+            return CreateAtlasMarkup(atlas, size or GLYPH, size or GLYPH)
         end
     end
     return GLYPH_FALLBACK[key] or tostring(key)

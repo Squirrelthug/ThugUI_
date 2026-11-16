@@ -373,6 +373,312 @@ end
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+P.SCHEMA = 1
+P.SCHEMA_STEPS = {}
+
+local function SplitPath(path)
+    local segs = {}
+    for seg in tostring(path):gmatch("[^%.]+") do segs[#segs + 1] = seg end
+    return segs
+end
+
+
+local function KeyOf(t, seg)
+    if t[seg] ~= nil then return seg end
+    local n = tonumber(seg)
+    if n ~= nil and t[n] ~= nil then return n end
+    return seg
+end
+
+
+
+
+local function ParentOf(root, segs, create)
+    local cur = root
+    for i = 1, #segs - 1 do
+        local key = KeyOf(cur, segs[i])
+        local nxt = cur[key]
+        if nxt == nil and create then
+            nxt = {}
+            cur[key] = nxt
+        end
+        if type(nxt) ~= "table" then return nil end
+        cur = nxt
+    end
+    return cur, KeyOf(cur, segs[#segs])
+end
+
+local function JoinPath(root, segs)
+    return root .. "." .. table.concat(segs, ".")
+end
+
+
+
+
+local function RootTables(profile, root)
+    if root == "config" then
+        return type(profile.config) == "table" and { profile.config } or {}
+    end
+    local list = {}
+    for _, t in ipairs(Buckets(profile)) do
+        if type(t) == "table" then list[#list + 1] = t end
+    end
+    return list
+end
+
+
+
+local function MoveValue(t, fromSegs, toSegs)
+    local fp, fk = ParentOf(t, fromSegs, false)
+    if not fp or fp[fk] == nil then return false end
+    local tp, tk = ParentOf(t, toSegs, true)
+    if not tp then return false end
+    if fp == tp and fk == tk then return false end
+    if tp[tk] == nil then tp[tk] = fp[fk] end
+    fp[fk] = nil
+    return true
+end
+
+
+local function OpVariants(op, root, from, to)
+    local list = { { from = from, to = to } }
+    if op.modes and root == "db" then
+        local pf = { unpack(from) }
+        pf[1] = pf[1] .. P.PAD_SUFFIX
+        local pt
+        if to then
+            pt = { unpack(to) }
+            pt[1] = pt[1] .. P.PAD_SUFFIX
+        end
+        list[2] = { from = pf, to = pt, pad = true }
+    end
+    return list
+end
+
+local function ApplyOp(profile, op, report, seen)
+    local kind = type(op) == "table" and op.op
+    if kind ~= "rename" and kind ~= "move" and kind ~= "retype" and kind ~= "retire" then
+        error("schema step: unknown op " .. tostring(kind), 0)
+    end
+    local isMove = kind == "rename" or kind == "move"
+    local ref = isMove and op.from or op.path
+    local segs = SplitPath(ref or "")
+    local root = table.remove(segs, 1)
+    if (root ~= "config" and root ~= "db") or #segs == 0 then
+        error("schema step: path needs a config. or db. root and a key: " .. tostring(ref), 0)
+    end
+    local toSegs
+    if isMove then
+        toSegs = SplitPath(op.to or "")
+        if table.remove(toSegs, 1) ~= root or #toSegs == 0 then
+            error("schema step: a rename needs a target under the same root: " .. tostring(op.to), 0)
+        end
+    elseif kind == "retype" and type(op.fn) ~= "function" then
+        error("schema step: retype needs fn: " .. tostring(ref), 0)
+    end
+
+    for _, v in ipairs(OpVariants(op, root, segs, toSegs)) do
+        local path = JoinPath(root, v.from)
+        local hit = false
+        for _, t in ipairs(RootTables(profile, root)) do
+            if isMove then
+                if MoveValue(t, v.from, v.to) then
+                    hit = true
+                    report.changed = report.changed + 1
+                end
+            else
+                local p, k = ParentOf(t, v.from, false)
+                if p and p[k] ~= nil then
+                    if kind == "retire" then
+                        p[k] = nil
+                        hit = true
+                        report.changed = report.changed + 1
+                    else
+                        local ok, new = pcall(op.fn, p[k])
+                        if not ok then
+                            
+                            
+                            
+                            p[k] = nil
+                            report.changed = report.changed + 1
+                            report.retired[#report.retired + 1] =
+                                { path = path, reason = "could not be converted: " .. tostring(new) }
+                        elseif new ~= p[k] then
+                            p[k] = new
+                            report.changed = report.changed + 1
+                        end
+                    end
+                end
+            end
+        end
+        
+        
+        if root == "db" and #v.from == 1 and not v.pad and type(profile.scopes) == "table"
+            and (kind == "retire" or (isMove and #v.to == 1)) then
+            local old = profile.scopes[v.from[1] ]
+            if old ~= nil then
+                if isMove and profile.scopes[v.to[1] ] == nil then profile.scopes[v.to[1] ] = old end
+                profile.scopes[v.from[1] ] = nil
+                hit = true
+                report.changed = report.changed + 1
+            end
+        end
+        if kind == "retire" and hit and not seen[path] then
+            seen[path] = true
+            report.retired[#report.retired + 1] = { path = path, reason = tostring(op.reason or "retired") }
+        end
+    end
+end
+
+
+
+
+function P:RunSchemaSteps(profile, from)
+    local report = { retired = {}, changed = 0 }
+    if type(profile) ~= "table" then return report end
+    local seen = {}
+    for n = math.max(1, tonumber(from) or 1), self.SCHEMA - 1 do
+        local step = self.SCHEMA_STEPS[n]
+        if type(step) == "table" then
+            for _, op in ipairs(step) do ApplyOp(profile, op, report, seen) end
+        end
+    end
+    return report
+end
+
+
+local function SchemaOf(t)
+    local n = type(t) == "table" and tonumber(t.schema)
+    if not n or n < 1 then return 1 end
+    return math.floor(n)
+end
+P.SchemaOf = SchemaOf
+
+
+
+
+
+function P:MigrateSchema()
+    local out = { profiles = 0, changed = 0, retired = 0 }
+    for _, profile in pairs(self:Store().profiles) do
+        if type(profile) == "table" then
+            local from = SchemaOf(profile)
+            if from < self.SCHEMA then
+                local report = self:RunSchemaSteps(profile, from)
+                out.profiles = out.profiles + 1
+                out.changed = out.changed + report.changed
+                out.retired = out.retired + #report.retired
+            end
+            if from <= self.SCHEMA then profile.schema = self.SCHEMA end
+        end
+    end
+    return out
+end
+
+
+
+
+function P.DefaultShape(defaults, out, prefix)
+    out = out or {}
+    prefix = prefix or "db"
+    for k, v in pairs(defaults or {}) do
+        local path = prefix .. "." .. tostring(k)
+        out[path] = type(v)
+        if type(v) == "table" then P.DefaultShape(v, out, path) end
+    end
+    return out
+end
+
+
+
+
+
+
+
+P.SCHEMA_ALSO = {
+    ["db.Theme.background.image"] = { number = true },
+}
+
+
+
+
+
+local function Conform(value, default, path, lpath, skipped, stats)
+    for k, v in pairs(value) do
+        local p = path .. "." .. tostring(k)
+        local lp = lpath .. "." .. tostring(k)
+        local d = default[k]
+        local also = P.SCHEMA_ALSO[lp]
+        if d == nil then
+            stats.undescribed = stats.undescribed + 1
+        elseif type(d) ~= type(v) and not (also and also[type(v)]) then
+            value[k] = nil
+            skipped[#skipped + 1] = { path = p, reason = ("expected %s, found %s"):format(type(d), type(v)) }
+        elseif type(v) == "table" and type(d) == "table" then
+            Conform(v, d, p, lp, skipped, stats)
+        end
+    end
+end
+
+
+
+
+
+function P:ValidateShape(profile, defaults)
+    defaults = defaults or ThugUI.defaults or {}
+    local skipped, stats = {}, { undescribed = 0 }
+    if type(profile) ~= "table" or type(profile.db) ~= "table" then return skipped, stats end
+    local keys = {}
+    for k in pairs(profile.db) do keys[#keys + 1] = k end
+    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+    for _, k in ipairs(keys) do
+        local d = defaults[k]
+        local lkey = k
+        if d == nil and type(k) == "string" then
+            local base = k:match("^(.+)" .. self.PAD_SUFFIX .. "$")
+            if base and self.MODE_KEY_SET[base] then
+                d = defaults[base]
+                lkey = base
+            end
+        end
+        if type(d) == "table" then
+            local v = profile.db[k]
+            local path = "db." .. tostring(k)
+            if type(v) ~= "table" then
+                profile.db[k] = nil
+                skipped[#skipped + 1] = { path = path, reason = ("expected table, found %s"):format(type(v)) }
+            else
+                Conform(v, d, path, "db." .. tostring(lkey), skipped, stats)
+            end
+        end
+    end
+    return skipped, stats
+end
+
+
+
+
 function P:ComputePadAtLoad()
     local M, CM = ThugUI.Modules, ThugUI.ControllerMode
     if not (M and CM and CM.IsActive) then return false end
@@ -444,6 +750,11 @@ function P:Bootstrap()
     
     self.flatMoved = self:MigrateFlatTables()
     self.modesMigrated = self:MigrateModes()
+
+    
+    
+    
+    self.schemaMigrated = self:MigrateSchema()
 
     
     
@@ -573,6 +884,11 @@ function P:OnLogin()
             tostring(key and s.chars[key]), tostring(self.migrated))
         if (self.keysRenamed or 0) > 0 then
             ThugUI.Diagnostics:Log("PROFILES", "renamed keys in %d profile(s)", self.keysRenamed)
+        end
+        local sm = self.schemaMigrated
+        if sm and sm.profiles > 0 then
+            ThugUI.Diagnostics:Log("PROFILES", "schema steps to schema %d ran on %d profile(s): %d value(s) changed, %d retired",
+                self.SCHEMA, sm.profiles, sm.changed, sm.retired)
         end
     end
     if not key then return end
@@ -928,6 +1244,7 @@ function P:Create(name, fromName)
             db = DeepCopy(src.db),
             scopes = DeepCopy(src.scopes or {}),
             layers = DeepCopy(src.layers or {}),
+            schema = src.schema,
         }
     else
         s.profiles[name] = {
@@ -935,6 +1252,7 @@ function P:Create(name, fromName)
             db = {},
             scopes = {},
             layers = {},
+            schema = self.SCHEMA,
         }
     end
     return true
@@ -1033,6 +1351,8 @@ function P:CopyInto(targetName, sourceName)
     target.layers = target.layers or {}
     wipe(target.layers)
     for k, v in pairs(copiedLayers) do target.layers[k] = v end
+    
+    target.schema = source.schema
 
     if targetName == self.active then
         self:PromptReload(targetName)
@@ -1205,6 +1525,7 @@ ThugUI.Dialogs["THUGUI_PROFILE_RELOAD"] = {
 
 
 
+
 P.SHARE_TAG = "THUG"
 
 P.CLIENT_LETTER = { retail = "R", forever = "F" }
@@ -1278,6 +1599,8 @@ function P:Export()
         
         
         client = ThugUI.client,
+        
+        schema = P.SCHEMA,
         name = self.active,
         config = PlainCopy(_G.ThugUI_Config or {}),
         db = db,
@@ -1305,7 +1628,9 @@ function P:DecodeShare(text)
     local major, letter, body = text:match("^" .. P.SHARE_TAG .. "(%d+)([RF]):(.+)$")
     if not major then return nil, "notours" end
     major = tonumber(major)
-    if major ~= P.Major() then return nil, "major", major end
+    
+    
+    if major > P.Major() then return nil, "newer" end
     
     if LETTER_CLIENT[letter] ~= ThugUI.client then return nil, "client", LETTER_CLIENT[letter] end
     local E = Encoding()
@@ -1318,14 +1643,27 @@ function P:DecodeShare(text)
         return nil, "corrupt"
     end
     if payload.client ~= ThugUI.client then return nil, "client", payload.client end
+    local schema = SchemaOf(payload)
+    if schema > P.SCHEMA then return nil, "newer", schema end
     return payload
 end
 
 
 
+local function CountLeaves(t)
+    local n = 0
+    for _, v in pairs(t) do
+        if type(v) == "table" and next(v) ~= nil then n = n + CountLeaves(v) else n = n + 1 end
+    end
+    return n
+end
+
+
+
+
 function P:Import(text, name)
-    local payload, reason, major = self:DecodeShare(text)
-    if not payload then return nil, reason, major end
+    local payload, reason, extra = self:DecodeShare(text)
+    if not payload then return nil, reason, extra end
     local s = self:Store()
     local base = (type(name) == "string" and not name:match("^%s*$")) and name
         or ((type(payload.name) == "string" and payload.name ~= "" and payload.name or "Shared") .. " (imported)")
@@ -1345,6 +1683,22 @@ function P:Import(text, name)
             end
         end
     end
+    
+    
+    
+    local fromSchema = SchemaOf(payload)
+    local report = { fromSchema = fromSchema, imported = 0, skipped = {} }
+    for _, r in ipairs(self:RunSchemaSteps(profile, fromSchema).retired) do
+        report.skipped[#report.skipped + 1] = r
+    end
+    local bad, stats = self:ValidateShape(profile)
+    for _, r in ipairs(bad) do report.skipped[#report.skipped + 1] = r end
+    report.imported = CountLeaves(profile.config) + CountLeaves(profile.db)
+    profile.schema = self.SCHEMA
+    if ThugUI.Diagnostics and type(ThugUI.Diagnostics.Log) == "function" then
+        ThugUI.Diagnostics:Log("PROFILES", "import from schema %d: %d setting(s) applied, %d skipped, %d outside the defaults' shape kept",
+            fromSchema, report.imported, #report.skipped, stats.undescribed)
+    end
     s.profiles[final] = profile
     for k, scope in pairs(profile.scopes) do
         local bucket = self:LayerFor(scope, final)
@@ -1353,7 +1707,7 @@ function P:Import(text, name)
         local pk = k .. self.PAD_SUFFIX
         if bucket and self.MODE_KEY_SET[k] and type(profile.db[pk]) == "table" then bucket[pk] = DeepCopy(profile.db[pk]) end
     end
-    return final
+    return final, report
 end
 
 P.SHARE_REASONS = {
@@ -1362,18 +1716,20 @@ P.SHARE_REASONS = {
     unsupported = "This game client cannot read profile strings (C_EncodingUtil is missing).",
     corrupt = "The string is damaged or incomplete. Copy it again in full.",
     encode = "The profile could not be turned into a string.",
+    newer = "That string was made by a newer ThugUI. Update ThugUI to import it.",
 }
 local CLIENT_NAME = { retail = "retail (the main game)", forever = "WoW Forever" }
 P.CLIENT_NAME = CLIENT_NAME
 
 function P:ShareReasonText(reason, major)
+    
     if reason == "client" then
         return ("That string was made on %s, and this is %s. Profiles only move between the same game.")
             :format(CLIENT_NAME[major] or "another game", CLIENT_NAME[ThugUI.client] or tostring(ThugUI.client))
     end
-    if reason == "major" then
-        return ("That string was made with ThugUI %d.x and this is ThugUI %d.x. Settings move between "
-            .. "versions with the same first number only."):format(major or 0, P.Major())
+    
+    if reason == "newer" and type(major) == "number" then
+        return ("That string was made by a newer ThugUI (schema %d). Update ThugUI to import it."):format(major)
     end
     return P.SHARE_REASONS[reason] or tostring(reason)
 end

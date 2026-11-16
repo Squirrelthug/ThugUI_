@@ -643,16 +643,84 @@ local function RewardTooltip()
     return rewardTooltip
 end
 
+
+
+
+
+
+
+local COMPARE_SLOTS = ThugUI.EquipSlots
+Dialogue.COMPARE_SLOTS = COMPARE_SLOTS
+
+
+
+local function RewardEquipLoc(item)
+    if not (GetQuestItemLink and C_Item and C_Item.GetItemInfoInstant) then return nil end
+    local ok, link = pcall(GetQuestItemLink, item.type, item.index)
+    if not ok or not link then return nil end
+    local ok2, _, _, _, equipLoc = pcall(C_Item.GetItemInfoInstant, link)
+    if not ok2 or not equipLoc or equipLoc == "" then return nil end
+    return equipLoc
+end
+
+
+
+local compareTips = {}
+frame.__compareTips = compareTips
+local function CompareTooltip(i)
+    if not compareTips[i] then
+        local ok, tip = pcall(CreateFrame, "GameTooltip", "ThugUI_DialogueCompareTooltip" .. i, frame, "GameTooltipTemplate")
+        if not ok or not tip then return nil end
+        compareTips[i] = tip
+    end
+    return compareTips[i]
+end
+
+local function HideCompareTooltips()
+    for _, tip in ipairs(compareTips) do tip:Hide() end
+end
+
+local function ShowCompareTooltips(item, rewardTip)
+    HideCompareTooltips()
+    local slots = COMPARE_SLOTS[RewardEquipLoc(item) or ""]
+    if not slots then return end
+    local below = rewardTip
+    for i, slot in ipairs(slots) do
+        local tip = CompareTooltip(i)
+        if not tip then return end
+        tip:SetOwner(rewardTip, "ANCHOR_NONE")
+        tip:ClearAllPoints()
+        tip:SetPoint("BOTTOMLEFT", below, "TOPLEFT", 0, 2)
+        local worn = GetInventoryItemID and GetInventoryItemID("player", slot)
+        if worn then
+            tip:SetInventoryItem("player", slot)
+            
+            
+            tip:Show()
+        else
+            
+            
+            local equipLoc = RewardEquipLoc(item)
+            local name = equipLoc and _G[equipLoc]
+            tip:SetText(name and ("Nothing equipped: " .. name) or "Nothing equipped", 0.7, 0.7, 0.7)
+            tip:Show()
+        end
+        below = tip
+    end
+end
+
 local function ShowRewardTooltip(item)
     local tip = RewardTooltip()
     if tip and item.type and item.index and tip.SetQuestItem then
         tip:SetOwner(item, "ANCHOR_RIGHT")
         tip:SetQuestItem(item.type, item.index)
+        ShowCompareTooltips(item, tip)
     end
 end
 
 local function HideRewardTooltip()
     if rewardTooltip then rewardTooltip:Hide() end
+    HideCompareTooltips()
 end
 
 local function ChoiceItem(index)
