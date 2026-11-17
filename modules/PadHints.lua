@@ -33,18 +33,29 @@ local ROW_H, PAD, WIDTH, GLYPH = 24, 16, 260, 18
 local GLYPH_FALLBACK = {
     PADFORWARD = "Start", PADBACK = "Select", PAD1 = "Cross", PAD2 = "Circle", PAD3 = "Square", PAD4 = "Triangle",
     PADLSHOULDER = "L1", PADRSHOULDER = "R1", PADLTRIGGER = "L2", PADRTRIGGER = "R2",
+    PADLSTICK = "L3", PADRSTICK = "R3",
     PADDUP = "D-pad up", PADDDOWN = "D-pad down", PADDLEFT = "D-pad left", PADDRIGHT = "D-pad right",
 }
 
 
 
-function PH.Glyph(key, size)
+function PH.GlyphAtlas(key)
     local util = _G.InputIconTextureSetUtility
-    if util and util.GetNormalActiveInputIconButtonTexture and CreateAtlasMarkup then
+    if util and util.GetNormalActiveInputIconButtonTexture then
         local ok, atlas = pcall(util.GetNormalActiveInputIconButtonTexture, key)
         if ok and type(atlas) == "string" and atlas ~= "" then
-            return CreateAtlasMarkup(atlas, size or GLYPH, size or GLYPH)
+            return atlas
         end
+    end
+    return nil
+end
+
+
+
+function PH.Glyph(key, size)
+    local atlas = CreateAtlasMarkup and PH.GlyphAtlas(key)
+    if atlas then
+        return CreateAtlasMarkup(atlas, size or GLYPH, size or GLYPH)
     end
     return GLYPH_FALLBACK[key] or tostring(key)
 end
@@ -214,6 +225,15 @@ PH:Register{ id = "fishing-double", group = "GAMEPLAY", text = "Cast fishing (pr
         return g and (g .. " " .. g)
     end,
     enabled = function() return not (ThugUI.moduleOn and ThugUI.moduleOn.fishing == false) end }
+
+
+
+PH:Register{ id = "stick-reload", group = "GAMEPLAY", text = "Reload the interface (double-tap Select)",
+    keys = function() return PH.Glyph("PADSOCIAL") end,
+    enabled = function()
+        local S = ThugUI.StickReload
+        return S and S.IsListening and S:IsListening()
+    end }
 
 
 local login = CreateFrame("Frame")

@@ -1189,6 +1189,14 @@ function C:build(column)
     self:BuildModel()
 end
 
+
+
+
+local function ChestRows(room, size)
+    local fit = math.floor((room + FS.GAP) / (size + FS.GAP))
+    return math.max(1, math.min(CHEST_ROWS, fit))
+end
+
 local function Place(b, parent, x, y, size)
     if not b then
         return
@@ -1211,10 +1219,12 @@ function C:Layout(width, height, size, cell)
     
     
     local rowGap = framed and SK.ROW_GAP or ROW_GAP
-    local rowStep = cell + rowGap
     local titleH = FS.HeaderHeight(size)
     local small = math.max(size - 4, 8)
-    self.cell = cell
+    
+    
+    local chestCell = FS:IconSize("iconsChest", cell)
+    self.chestCell = chestCell
     self.framed = framed
     self.rowGap = rowGap
 
@@ -1236,6 +1246,23 @@ function C:Layout(width, height, size, cell)
         b.label:SetFont(STANDARD_TEXT_FONT, size)
     end
     local top = titleH + tabH + (framed and 6 or 8)
+    
+    
+    
+    
+    
+    
+    local wp0 = framed and SK.WELL_PAD or 0
+    local below = framed and (4 + 18 + SK.PLATE_H + 6 + chestCell + 2 * wp0) or (gap + size + 8 + chestCell)
+    local fitH = math.floor((height - top - below) / 9) - rowGap
+    local fitW = math.floor(width * 0.35)
+    local want = FS:IconSize("iconsDoll", cell)
+    local doll = want
+    if want > cell then
+        doll = math.min(want, math.max(cell, math.min(fitH, fitW)))
+    end
+    local rowStep = doll + rowGap
+    self.cell = doll
     self.size = size
     self.rowHeight = size + 8
     
@@ -1255,19 +1282,19 @@ function C:Layout(width, height, size, cell)
 
     for row = 1, 8 do
         local y = -(top + (row - 1) * rowStep)
-        Place(self.byID[LEFT_IDS[row] ], self.frame, 0, y, cell)
-        Place(self.byID[RIGHT_IDS[row] ], self.frame, width - cell, y, cell)
+        Place(self.byID[LEFT_IDS[row] ], self.frame, 0, y, doll)
+        Place(self.byID[RIGHT_IDS[row] ], self.frame, width - doll, y, doll)
     end
-    local bottomWidth = 4 * cell + 3 * rowGap
+    local bottomWidth = 4 * doll + 3 * rowGap
     local bottomX = math.floor((width - bottomWidth) / 2)
     for i, id in ipairs(BOTTOM_IDS) do
-        Place(self.byID[id], self.frame, bottomX + (i - 1) * rowStep, -(top + 8 * rowStep), cell)
+        Place(self.byID[id], self.frame, bottomX + (i - 1) * rowStep, -(top + 8 * rowStep), doll)
     end
 
     
     
     
-    self:LayoutModel(width, top, rowStep, cell)
+    self:LayoutModel(width, top, rowStep, doll)
     local sideWidth = math.max(bottomX - 8, 1)
     local textY = -(top + 8 * rowStep)
     self.name:SetFont(STANDARD_TEXT_FONT, size + 6)
@@ -1296,8 +1323,8 @@ function C:Layout(width, height, size, cell)
         self.noGear:SetFont(STANDARD_TEXT_FONT, small)
         self.noGear:ClearAllPoints()
         self.noGear:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, -self.chestTop)
-        self.chestScroll.cols = math.max(1, math.floor((width + gap) / (cell + gap)))
-        self.chestScroll.rows = CHEST_ROWS
+        self.chestScroll.cols = FS.FitCount(width, chestCell)
+        self.chestScroll.rows = ChestRows(height - self.chestTop, chestCell)
         self.rects = nil
         return
     end
@@ -1306,9 +1333,10 @@ function C:Layout(width, height, size, cell)
     local dividerY = top + 9 * rowStep + 4
     local plateY = dividerY + 18
     local wellTop = plateY + SK.PLATE_H + 6
-    local wellH = CHEST_ROWS * cell + (CHEST_ROWS - 1) * gap + 2 * wp
+    local chestRows = ChestRows(height - wellTop - 2 * wp, chestCell)
+    local wellH = chestRows * chestCell + (chestRows - 1) * gap + 2 * wp
     self.rects = {
-        doll = { cell + 12, top, width - 2 * cell - 24, 8 * rowStep - rowGap },
+        doll = { doll + 12, top, width - 2 * doll - 24, 8 * rowStep - rowGap },
         divider = { 0, dividerY, width, 12 },
         plate = { 0, plateY, math.min(220, width), SK.PLATE_H },
         chest = { 0, wellTop, width, wellH },
@@ -1320,8 +1348,8 @@ function C:Layout(width, height, size, cell)
     self.noGear:SetFont(STANDARD_TEXT_FONT, small)
     self.noGear:ClearAllPoints()
     self.noGear:SetPoint("TOPLEFT", self.frame, "TOPLEFT", wp + 4, -self.chestTop)
-    self.chestScroll.cols = math.max(1, math.floor((width - 2 * wp - SK.SCROLL_W - SK.SCROLL_GAP + gap) / (cell + gap)))
-    self.chestScroll.rows = CHEST_ROWS
+    self.chestScroll.cols = FS.FitCount(width - 2 * wp - SK.SCROLL_W - SK.SCROLL_GAP, chestCell)
+    self.chestScroll.rows = chestRows
 end
 
 
@@ -1477,7 +1505,8 @@ function C:RenderChest()
         entry.cell = nil
     end
     local shown = 0
-    local step = self.cell + gap
+    local size = self.chestCell or self.cell
+    local step = size + gap
     for i = first, last do
         local k = i - first + 1
         if k > usable then
@@ -1485,7 +1514,7 @@ function C:RenderChest()
         end
         local cell = self.chestCells[k]
         cell:ClearAllPoints()
-        cell:SetSize(self.cell, self.cell)
+        cell:SetSize(size, size)
         cell:SetPoint("TOPLEFT", self.frame, "TOPLEFT", (self.chestX0 or 0) + ((k - 1) % state.cols) * step,
             -(self.chestTop + math.floor((k - 1) / state.cols) * step))
         FS.PaintCell(cell, entries[i].item)

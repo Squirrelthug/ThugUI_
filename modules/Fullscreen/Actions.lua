@@ -1009,6 +1009,8 @@ local function PlateName(p)
         return "Confirm"
     elseif p.id == "split" then
         return "Split stack"
+    elseif p.id == "bind" then
+        return "Bind to controller button"
     end
     return p.title
 end
@@ -1214,6 +1216,10 @@ function A:ShowPanel(spec)
         end
     end
     self.panel = p
+    
+    if p.id ~= "bind" then
+        self.bind = nil
+    end
     self:Sync()
     FS:Refocus()
 end
@@ -1230,6 +1236,7 @@ function A:ClosePanel()
     self.panel = nil
     self.menu = nil
     self.picker = nil
+    self.bind = nil
     self:HidePanel()
     self:Sync()
     if FS.UI.frame and FS.UI.frame:IsShown() then
@@ -1285,6 +1292,10 @@ end
 function A:OnPad(button)
     if not self.panel then
         return false
+    end
+    if self.panel.id == "bind" and self.bind then
+        self:BindPad(button)
+        return true
     end
     if button == "PADDUP" then
         self:PanelMove(-1)
@@ -1710,6 +1721,12 @@ function A:MenuRows()
             end
         end
     end
+    
+    
+    local bind = A.BindRow(item, t)
+    if bind then
+        rows[#rows + 1] = bind
+    end
     local info = t.bag and C_Container.GetContainerItemInfo(t.bag, t.slot)
     if info and (info.stackCount or 0) > 1 and not info.isLocked then
         rows[#rows + 1] = {
@@ -1730,6 +1747,367 @@ function A:MenuRows()
         }
     end
     return rows
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local BIND_WATCH_SECONDS = 120
+
+
+
+
+
+
+function A.BindRow(item, target)
+    if not (IsBagItem(item) and target and target.bag and target.itemID) then
+        return nil
+    end
+    if type(_G.InRepairMode) == "function" and _G.InRepairMode() then
+        return nil
+    end
+    if not IsUsable(item) then
+        return nil
+    end
+    
+    
+    local reason
+    if Combat() then
+        reason = MSG_NOT_NOW
+    elseif _G.CursorHasItem and _G.CursorHasItem() then
+        reason = "Put down what is on your cursor first"
+    end
+    return {
+        id = "bind", label = G("CONTEXT_ACTION_LABEL_BIND_TO_GAMEPAD_ACTION_BAR", "Bind to controller button"),
+        enabled = reason == nil, reason = reason, legend = "Bind to controller button",
+        run = function() A:RunMenuBind() end,
+    }
+end
+
+
+
+
+
+function A:WatchBind()
+    local frame = self.bindWatch
+    if not frame then
+        frame = CreateFrame("Frame")
+        self.bindWatch = frame
+        frame:SetScript("OnEvent", function(_, event, addon, func)
+            if A.bindWatching and addon == "ThugUI" then
+                FS.bindTainted = true
+                A.bindHit = true
+                Log("bind: TAINT %s %s", tostring(event), tostring(func))
+            end
+        end)
+    end
+    self.bindWatchToken = (self.bindWatchToken or 0) + 1
+    local token = self.bindWatchToken
+    self.bindWatching = true
+    self.bindHit = nil
+    local watched = false
+    for _, event in ipairs({ "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN" }) do
+        if pcall(frame.RegisterEvent, frame, event) then
+            watched = true
+        end
+    end
+    if not watched then
+        Log("bind: could not be watched (no ADDON_ACTION events)")
+    end
+    C_Timer.After(BIND_WATCH_SECONDS, function()
+        if A.bindWatchToken == token then
+            A.bindWatching = nil
+            pcall(frame.UnregisterEvent, frame, "ADDON_ACTION_BLOCKED")
+            pcall(frame.UnregisterEvent, frame, "ADDON_ACTION_FORBIDDEN")
+            if not A.bindHit then
+                Log("bind: clean after 120 s")
+            end
+        end
+    end)
+end
+
+local BIND_ACTION_BUTTONS = 8
+local BIND_BARS = { none = "topBar", lt = "leftBar", rt = "rightBar", both = "bottomBar" }
+local MSG_BIND_KEPT = "That button is kept for the game's own actions. Try another, or hold a trigger."
+local MSG_BIND_FAILED = "The game didn't take it there. Try another button."
+
+local function BindGlyph(key)
+    local PH = ThugUI.PadHints
+    return PH and PH.Glyph and PH.Glyph(key) or key
+end
+
+
+
+local function BindKeys()
+    local keys = {}
+    for index = 1, BIND_ACTION_BUTTONS do
+        local key = _G.GetBindingKey and _G.GetBindingKey("GAMEPADACTIONBUTTON" .. index, 1)
+        if key then
+            keys[key] = index
+        end
+    end
+    return keys
+end
+
+local function BindKeyList(keys)
+    local list = {}
+    for key, index in pairs(keys) do
+        list[#list + 1] = { key = key, index = index }
+    end
+    table.sort(list, function(x, y) return x.index < y.index end)
+    for i, entry in ipairs(list) do
+        list[i] = entry.key .. ":" .. entry.index
+    end
+    return table.concat(list, ",")
+end
+
+
+local function BindSlot(bar, index)
+    local main = _G.GamepadMainActionBarFrame
+    local unit = type(main) == "table" and main.PageUnit
+    local bars = type(unit) == "table" and unit.actionBars
+    local one = type(bars) == "table" and bars[bar]
+    local buttons = type(one) == "table" and one.actionButtons
+    local button = type(buttons) == "table" and buttons[index]
+    if type(button) ~= "table" or type(button.GetID) ~= "function" then
+        return nil
+    end
+    local ok, slot = pcall(button.GetID, button)
+    if ok and type(slot) == "number" and slot > 0 then
+        return slot
+    end
+    return nil
+end
+
+local function SameList(a, b)
+    if #a ~= #b then
+        return false
+    end
+    for i = 1, #a do
+        if a[i] ~= b[i] then
+            return false
+        end
+    end
+    return true
+end
+
+
+
+local function BindPlace(itemID, slot)
+    ClearCursorSafe()
+    _G.C_Item.PickupItem(itemID)
+    local before = { _G.GetCursorInfo() }
+    if #before == 0 then
+        return false, "nothing on the cursor"
+    end
+    A:WatchBind()
+    _G.PlaceAction(slot)
+    local after = { _G.GetCursorInfo() }
+    ClearCursorSafe()
+    local kind, id = _G.GetActionInfo(slot)
+    if (kind == "item" and id == itemID) or not SameList(before, after) then
+        return true
+    end
+    return false, ("slot %s: %s %s"):format(tostring(slot), tostring(kind), tostring(id))
+end
+
+function A:BindModifier()
+    local held = self.bind and self.bind.held or {}
+    if held.PADLTRIGGER and held.PADRTRIGGER then
+        return "both"
+    end
+    return held.PADLTRIGGER and "lt" or (held.PADRTRIGGER and "rt" or "none")
+end
+
+function A:BindBarLine()
+    local modifier = self:BindModifier()
+    local lt, rt = BindGlyph("PADLTRIGGER"), BindGlyph("PADRTRIGGER")
+    if modifier == "both" then
+        return "Bar: " .. lt .. " + " .. rt
+    elseif modifier == "lt" then
+        return "Bar: " .. lt
+    elseif modifier == "rt" then
+        return "Bar: " .. rt
+    end
+    return "Bar: no trigger held"
+end
+
+
+function A:BindText()
+    local state = self.bind
+    local text = "Press the button to put it on. Hold " .. BindGlyph("PADLTRIGGER") .. ", "
+        .. BindGlyph("PADRTRIGGER") .. " or both for the other bars.\n\n" .. self:BindBarLine()
+    if state and state.note then
+        text = text .. "\n\n|cffff7366" .. state.note .. "|r"
+    end
+    return text
+end
+
+
+function A:BindRefresh()
+    local p = self.panel
+    if not (self.bind and p and p.id == "bind") then
+        return
+    end
+    p.text = self:BindText()
+    self:Sync()
+    FS:Refocus()
+end
+
+
+local function BindTitle(itemID, fallback)
+    local name, quality
+    if _G.C_Item and _G.C_Item.GetItemInfo then
+        local ok, n, _, q = pcall(_G.C_Item.GetItemInfo, itemID)
+        if ok then
+            name, quality = n, q
+        end
+    end
+    name = name or fallback or tostring(itemID)
+    local color = quality and _G.ITEM_QUALITY_COLORS and _G.ITEM_QUALITY_COLORS[quality]
+    if color and color.r then
+        name = ("|cff%02x%02x%02x%s|r"):format(color.r * 255, color.g * 255, color.b * 255, name)
+    end
+    local icon = _G.C_Item and _G.C_Item.GetItemIconByID and _G.C_Item.GetItemIconByID(itemID)
+    if icon then
+        name = "|T" .. tostring(icon) .. ":20|t " .. name
+    end
+    return name
+end
+
+
+function A:OpenBindPicker(target)
+    local main = _G.GamepadMainActionBarFrame
+    if not (type(main) == "table" and type(main.PageUnit) == "table" and type(main.PageUnit.actionBars) == "table") then
+        Log("bind: refused no controller action bars")
+        FS:Message("The controller action bars are not available", "bag")
+        return
+    end
+    local keys = BindKeys()
+    local held = {}
+    
+    for _, trigger in ipairs({ "PADLTRIGGER", "PADRTRIGGER" }) do
+        if FS.held and FS.held[trigger] then
+            held[trigger] = true
+        end
+    end
+    self.bind = { itemID = target.itemID, keys = keys, held = held, name = target.name }
+    Log("bind: picker open %s keys=%s", tostring(target.itemID), BindKeyList(keys))
+    self:ShowPanel({
+        id = "bind", title = BindTitle(target.itemID, target.name), text = self:BindText(),
+        rows = {}, row = 1, onBack = function() A:BackToMenu() end,
+    })
+end
+
+
+function A:BindPad(button)
+    local state = self.bind
+    if button == "PADLTRIGGER" or button == "PADRTRIGGER" then
+        state.held[button] = true
+        self:BindRefresh()
+        return
+    end
+    local index = state.keys[button]
+    if not index and button ~= "PAD2" then
+        return
+    end
+    if Combat() then
+        Log("bind: refused in combat")
+        self:ClosePanel()
+        FS:Message(MSG_NOT_NOW, "bag")
+        return
+    end
+    local modifier = self:BindModifier()
+    local bar = BIND_BARS[modifier]
+    
+    
+    if button == "PAD2" and not (index and BindSlot(bar, index)) and modifier == "none" then
+        self:BackToMenu()
+        return
+    end
+    local slot = index and BindSlot(bar, index)
+    Log("bind: press %s bar=%s index=%s slot=%s", button, bar, tostring(index), tostring(slot))
+    if not slot then
+        Log("bind: refused no slot")
+        state.note = MSG_BIND_KEPT
+        self:BindRefresh()
+        return
+    end
+    local itemID = state.itemID
+    local valid = _G.C_GamepadUI and _G.C_GamepadUI.IsValidGamepadActionStorageSlotIndex
+    if valid then
+        local okValid, isValid = pcall(valid, slot)
+        if okValid and not isValid then
+            Log("bind: refused slot %s not valid", tostring(slot))
+            state.note = MSG_BIND_FAILED
+            self:BindRefresh()
+            return
+        end
+    end
+    local ok, placed, why = pcall(BindPlace, itemID, slot)
+    if not ok then
+        Log("bind: refused error %s", tostring(placed))
+        ClearCursorSafe()
+        placed = false
+    elseif why then
+        Log("bind: refused %s", tostring(why))
+    end
+    if placed then
+        Log("bind: placed %s in slot %s", tostring(itemID), tostring(slot))
+        local prefix = ""
+        if modifier == "lt" or modifier == "both" then
+            prefix = prefix .. BindGlyph("PADLTRIGGER") .. " + "
+        end
+        if modifier == "rt" or modifier == "both" then
+            prefix = prefix .. BindGlyph("PADRTRIGGER") .. " + "
+        end
+        local text = (state.name or tostring(itemID)) .. " is now on " .. prefix .. BindGlyph(button) .. "."
+        self:ClosePanel()
+        FS:Message(text, "bag")
+        print("|cff00ff00ThugUI:|r " .. text)
+    else
+        state.note = MSG_BIND_FAILED
+        self:BindRefresh()
+    end
+end
+
+
+function A:OnPadUp(button)
+    if not (self.bind and self.panel and self.panel.id == "bind") then
+        return
+    end
+    if (button == "PADLTRIGGER" or button == "PADRTRIGGER") and self.bind.held[button] then
+        self.bind.held[button] = nil
+        self:BindRefresh()
+    end
+end
+
+
+function A:RunMenuBind()
+    if Combat() then
+        FS:Message(MSG_NOT_NOW, "bag")
+        return
+    end
+    if _G.CursorHasItem and _G.CursorHasItem() then
+        FS:Message("Put down what is on your cursor first", "bag")
+        return
+    end
+    if not self:Recheck() then
+        return
+    end
+    self:OpenBindPicker(self.menu.target)
 end
 
 function A:RunMenuReplace(n)
@@ -2055,6 +2433,7 @@ function A:OnClose()
     self.panel = nil
     self.menu = nil
     self.picker = nil
+    self.bind = nil
     self.stash = nil
     self.popupSig = nil
     self.popupMode = nil
@@ -2078,6 +2457,10 @@ function FS.Legend()
         out[#out + 1] = { key = key, label = label, muted = muted }
     end
     local p = A.panel
+    if p and p.id == "bind" then
+        Add("PAD2", CANCEL or "Cancel")
+        return out
+    end
     if p then
         local row = p.rows[p.row]
         Add("PAD1", row and row.legend or G("ACTION_LABEL_SELECT", "Select"))

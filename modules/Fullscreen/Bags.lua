@@ -13,6 +13,8 @@ FS.Bags = B
 local TABS = { "inventory", "quest", "usable" }
 local TAB_LABELS = { inventory = "Inventory", quest = "Quest", usable = "Usable" }
 local EMPTY_BAG = "Interface\\Icons\\INV_Misc_Bag_08"
+
+
 local COLS = 8
 local STRIP_ROWS = 2
 local SHORT_MESSAGE = "Bags will refresh after combat"
@@ -40,9 +42,14 @@ function B:Build(column)
     self.total = 0
     self.entries = { grid = {}, strip = {}, bagslots = {} }
     self.scroll = { offset = 0, rows = 1, cols = COLS }
+    
+    
+    self.stripScroll = { offset = 0, rows = STRIP_ROWS, cols = COLS }
+    self.stripList = {}
     self.activeTab = "inventory"
     
     self.cellSize = 48
+    self.stripCell = 48
     self.gridTop = 66
     self.stripBottom = 90
     self.slotSize = 28
@@ -69,6 +76,13 @@ end
 
 
 
+local function Columns(inner, base, size)
+    return math.min(FS.FitCount(inner, size), FS.FitCount(COLS * base + (COLS - 1) * FS.GAP, size))
+end
+
+
+
+
 
 
 
@@ -83,7 +97,11 @@ function B:Layout(width, height, size, cell)
     local framed = FS.Framed()
     local SK = FS.SK
     local titleH = FS.HeaderHeight(size)
-    self.cellSize = cell
+    
+    local gridCell = FS:IconSize("iconsGrid", cell)
+    local stripCell = FS:IconSize("iconsStrip", cell)
+    self.cellSize = gridCell
+    self.stripCell = stripCell
     self.framed = framed
 
     self.title:SetFont(STANDARD_TEXT_FONT, size + 6)
@@ -104,9 +122,19 @@ function B:Layout(width, height, size, cell)
         b.label:SetFont(STANDARD_TEXT_FONT, size)
     end
 
-    self.slotSize = math.max(24, math.floor(cell * 0.6))
-    local stripH = STRIP_ROWS * cell + (STRIP_ROWS - 1) * gap
-    self.scroll.cols = COLS
+    
+    
+    local slotCount = MaxBag() + 1
+    local barW = framed and (width - 2 * FS.SK.WELL_PAD - 4) or width
+    local slotMost = math.floor((barW - 2 * gap * (slotCount - 1)) / slotCount)
+    self.slotSize = math.max(8, math.min(math.max(24, math.floor(FS:IconSize("iconsSlots", cell) * 0.6)), slotMost))
+    local stripH = STRIP_ROWS * stripCell + (STRIP_ROWS - 1) * gap
+    
+    
+    local inner = framed and (width - 2 * SK.WELL_PAD - SK.SCROLL_W - SK.SCROLL_GAP) or width
+    self.scroll.cols = Columns(inner, cell, gridCell)
+    self.stripScroll.cols = Columns(inner, cell, stripCell)
+    self.stripScroll.rows = STRIP_ROWS
     if not framed then
         self.gridTop = titleH + tabH + 8
         local barH = self.slotSize + small + 4
@@ -118,8 +146,9 @@ function B:Layout(width, height, size, cell)
         self.counts:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 0, barH + 6)
         self.stripBottom = barH + 6 + small + 4 + 6
         self.cellX0 = 0
+        self.stripX0 = 0
         local gridH = height - self.gridTop - self.stripBottom - stripH - 8
-        self.scroll.rows = math.max(1, math.floor((gridH + gap) / (cell + gap)))
+        self.scroll.rows = math.max(1, math.floor((gridH + gap) / (gridCell + gap)))
         self.rects = nil
         return
     end
@@ -133,7 +162,7 @@ function B:Layout(width, height, size, cell)
     local stripWellBottom = footerBottom + footerH + 8
     local gridWellBottom = stripWellBottom + stripWellH + 24
     local gridWellTop = titleH + tabH + 6
-    local gridWellH = math.max(2 * wp + cell, height - gridWellBottom - gridWellTop)
+    local gridWellH = math.max(2 * wp + gridCell, height - gridWellBottom - gridWellTop)
     local function FromTop(bottom, h)
         return height - bottom - h
     end
@@ -146,15 +175,19 @@ function B:Layout(width, height, size, cell)
     }
     self.gridTop = gridWellTop + wp
     self.stripBottom = stripWellBottom + wp
-    local gridInner = width - 2 * wp - SK.SCROLL_W - SK.SCROLL_GAP
-    self.cellX0 = wp + math.floor((gridInner - (COLS * cell + (COLS - 1) * gap)) / 2)
+    
+    local function RowX0(cols, c)
+        return wp + math.floor((inner - (cols * c + (cols - 1) * gap)) / 2)
+    end
+    self.cellX0 = RowX0(self.scroll.cols, gridCell)
+    self.stripX0 = RowX0(self.stripScroll.cols, stripCell)
     self.slotBar:ClearAllPoints()
     self.slotBar:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", wp + 2, wp)
     self.slotBar:SetSize(width - 2 * wp - 4, barH - 2 * wp)
     self.counts:SetFont(STANDARD_TEXT_FONT, small)
     self.counts:ClearAllPoints()
     self.counts:SetPoint("LEFT", self.frame, "BOTTOMLEFT", 28, footerBottom + footerH / 2)
-    self.scroll.rows = math.max(1, math.floor((gridWellH - 2 * wp + gap) / (cell + gap)))
+    self.scroll.rows = math.max(1, math.floor((gridWellH - 2 * wp + gap) / (gridCell + gap)))
 end
 
 
@@ -207,6 +240,7 @@ function B:Skin()
         end
         self.wells = wells
         self.gridBar = Skin.Scrollbar(self.frame)
+        self.stripBar = Skin.Scrollbar(self.frame)
     end
     local wells = self.wells
     if not wells then
@@ -238,10 +272,21 @@ function B:Skin()
             self.gridBar:Anchor(self.frame, grid[3] - SK.WELL_PAD - SK.SCROLL_W, -(grid[2] + SK.WELL_PAD),
                 grid[4] - 2 * SK.WELL_PAD)
         end
+        if self.stripBar then
+            local strip = self.rects.strip
+            self.stripBar:Anchor(self.frame, strip[3] - SK.WELL_PAD - SK.SCROLL_W, -(strip[2] + SK.WELL_PAD),
+                strip[4] - 2 * SK.WELL_PAD)
+        end
         self:UpdateMeter()
         self:UpdateBar()
-    elseif self.gridBar and self.gridBar.holder then
-        self.gridBar.holder:Hide()
+    else
+        
+        if self.gridBar and self.gridBar.holder then
+            self.gridBar.holder:Hide()
+        end
+        if self.stripBar and self.stripBar.holder then
+            self.stripBar.holder:Hide()
+        end
     end
 end
 
@@ -264,9 +309,16 @@ end
 
 
 function B:UpdateBar()
-    if self.gridBar and self.gridBar.holder and FS.Framed() and self.rects then
+    if not (FS.Framed() and self.rects) then
+        return
+    end
+    if self.gridBar and self.gridBar.holder then
         local total = math.ceil(#self.entries.grid / self.scroll.cols)
         self.gridBar:Update(self.scroll.offset, self.scroll.rows, total)
+    end
+    if self.stripBar and self.stripBar.holder then
+        local total = math.ceil(#self.entries.strip / self.stripScroll.cols)
+        self.stripBar:Update(self.stripScroll.offset, self.stripScroll.rows, total)
     end
 end
 
@@ -363,28 +415,53 @@ function B:Render()
     return short
 end
 
+
+
+
+
 function B:RenderStrip(list)
+    if list then
+        self.stripList = list
+        self.entries.strip = {}
+        for i, item in ipairs(list) do
+            self.entries.strip[i] = { item = item }
+        end
+        FS.Scroll.Clamp(self.stripScroll, #list)
+    end
+    local entries = self.entries.strip
+    local state = self.stripScroll
     local gap = FS.GAP
-    local capacity = STRIP_ROWS * COLS
-    local count = math.min(#list, capacity)
-    local usable, short = FS.EnsurePool(self.strip, count, self.frame)
-    self.entries.strip = {}
-    for i = 1, #self.strip do
-        self.strip[i]:Hide()
-        self.strip[i].item = nil
+    local first = state.offset * state.cols + 1
+    local last = math.min(#entries, first + state.rows * state.cols - 1)
+    local needed = math.max(0, last - first + 1)
+    local usable, short = FS.EnsurePool(self.strip, needed, self.frame)
+    for _, entry in ipairs(entries) do
+        entry.cell = nil
     end
-    local step = self.cellSize + gap
-    for i = 1, math.min(count, usable) do
-        local cell = self.strip[i]
-        local row = math.floor((i - 1) / COLS)
+    local size = self.stripCell or self.cellSize
+    local step = size + gap
+    local shown = 0
+    for i = first, last do
+        local k = i - first + 1
+        if k > usable then
+            break
+        end
+        local cell = self.strip[k]
+        local row = math.floor((k - 1) / state.cols)
         cell:ClearAllPoints()
-        cell:SetSize(self.cellSize, self.cellSize)
+        cell:SetSize(size, size)
         
-        cell:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", (self.cellX0 or 0) + ((i - 1) % COLS) * step,
+        cell:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", (self.stripX0 or self.cellX0 or 0) + ((k - 1) % state.cols) * step,
             self.stripBottom + (STRIP_ROWS - 1 - row) * step)
-        FS.PaintCell(cell, list[i])
-        self.entries.strip[i] = { item = list[i], cell = cell }
+        FS.PaintCell(cell, entries[i].item)
+        entries[i].cell = cell
+        shown = k
     end
+    for k = shown + 1, #self.strip do
+        self.strip[k]:Hide()
+        self.strip[k].item = nil
+    end
+    self:UpdateBar()
     return short
 end
 

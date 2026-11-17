@@ -12,7 +12,16 @@ ThugUI.Fullscreen = FS
 ThugUI:RegisterModule("Fullscreen", FS)
 
 
-ThugUI.defaults.Fullscreen = { character = true, combatClose = true, textSize = 18, skin = true }
+ThugUI.defaults.Fullscreen = {
+    character = true, combatClose = true, textSize = 18, skin = true,
+    
+    
+    
+    
+    
+    
+    iconsDoll = 100, iconsChest = 100, iconsGrid = 100, iconsStrip = 100, iconsSlots = 100,
+}
 
 local UI = {}
 
@@ -55,6 +64,21 @@ FS.TITLE_COLOUR = { 0.839, 0.690, 0.376 }
 
 function FS.Framed()
     return FS.Skin ~= nil and FS.Skin.Enabled()
+end
+
+
+
+
+
+function FS:IconSize(key, base)
+    local pct = tonumber(self:Cfg()[key]) or 100
+    pct = math.max(50, math.min(300, pct))
+    return math.max(8, math.floor(base * pct / 100 + 0.5))
+end
+
+
+function FS.FitCount(width, cell)
+    return math.max(1, math.floor((width + FS.GAP) / (cell + FS.GAP)))
 end
 
 
@@ -409,6 +433,8 @@ end
 
 local DIMMED = 0.4
 
+
+
 local function GlyphText(key, fallback, size)
     local hints = ThugUI.PadHints
     if hints and hints.Glyph then
@@ -421,25 +447,67 @@ local function GlyphText(key, fallback, size)
 end
 
 
-function FS.RefreshTabGlyphs(pair)
+
+
+
+
+
+
+local GLYPH_TEXT = { PADLSHOULDER = "L1", PADRSHOULDER = "R1" }
+
+
+
+local function ShowGlyph(holder, key)
+    local hints = ThugUI.PadHints
+    local atlas
+    if hints and hints.GlyphAtlas then
+        local ok, name = pcall(hints.GlyphAtlas, key)
+        if ok and type(name) == "string" and name ~= "" then
+            atlas = name
+        end
+    end
     
-    
-    pair.left:SetText(GlyphText("PADLSHOULDER", "L1", pair.glyphSize))
-    pair.right:SetText(GlyphText("PADRSHOULDER", "R1", pair.glyphSize))
+    local accepted = false
+    if atlas then
+        local ok, result = pcall(holder.texture.SetAtlas, holder.texture, atlas, false)
+        accepted = ok and result ~= false
+    end
+    if accepted then
+        holder.texture:Show()
+        holder.text:SetText("")
+        holder.text:Hide()
+        return atlas
+    end
+    holder.texture:Hide()
+    holder.text:SetText(GLYPH_TEXT[key])
+    holder.text:Show()
+    return nil
 end
+
+
+function FS.RefreshTabGlyphs(pair)
+    ShowGlyph(pair.left, "PADLSHOULDER")
+    ShowGlyph(pair.right, "PADRSHOULDER")
+end
+
 
 
 
 function FS.TabGlyphs(parent)
     local pair = {}
-    pair.left = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    pair.right = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    for _, fontString in ipairs({ pair.left, pair.right }) do
-        fontString:SetJustifyH("CENTER")
-        fontString:SetJustifyV("MIDDLE")
-        fontString:SetWordWrap(false)
+    for _, side in ipairs({ "left", "right" }) do
+        local holder = CreateFrame("Frame", nil, parent)
+        holder.texture = holder:CreateTexture(nil, "OVERLAY")
+        holder.texture:SetPoint("CENTER", holder, "CENTER", 0, 0)
+        holder.text = holder:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        holder.text:SetAllPoints(holder)
+        holder.text:SetJustifyH("CENTER")
+        holder.text:SetJustifyV("MIDDLE")
+        holder.text:SetWordWrap(false)
+        pair[side] = holder
     end
     FS.RefreshTabGlyphs(pair)
+    
     
     
     pair.events = CreateFrame("Frame", nil, parent)
@@ -458,20 +526,21 @@ end
 function FS.PlaceTabGlyphs(pair, parent, width, titleH, tabH, size)
     
     
-    
     local glyphSize = tabH - 4
     local glyphW = glyphSize + 8
     pair.glyphSize = glyphSize
-    for _, fontString in ipairs({ pair.left, pair.right }) do
-        fontString:SetFont(STANDARD_TEXT_FONT, size)
-        fontString:SetSize(glyphW, tabH)
-        fontString:ClearAllPoints()
+    for _, holder in ipairs({ pair.left, pair.right }) do
+        holder.text:SetFont(STANDARD_TEXT_FONT, size)
+        holder.texture:SetSize(glyphSize, glyphSize)
+        holder:SetSize(glyphW, tabH)
+        holder:ClearAllPoints()
     end
     pair.left:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -titleH)
     pair.right:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, -titleH)
     FS.RefreshTabGlyphs(pair)
     return glyphW + FS.GAP, width - glyphW - FS.GAP
 end
+
 
 
 
@@ -671,6 +740,7 @@ function FS:Layout()
         height = sh - 2 * MARGIN
     end
     self.panelInset = inset
+    
     
     
     
@@ -901,6 +971,9 @@ function FS:RegionState(region)
     if region == "grid" then
         return self.Bags.scroll
     end
+    if region == "strip" then
+        return self.Bags.stripScroll
+    end
     return nil
 end
 
@@ -911,8 +984,12 @@ function FS:Columns(region)
     if region == "armorchest" then
         return self.Character.chestScroll.cols
     end
-    if region == "grid" or region == "strip" then
+    if region == "grid" then
         return self.Bags.scroll.cols
+    end
+    
+    if region == "strip" then
+        return self.Bags.stripScroll.cols
     end
     if region == "bagslots" then
         return math.max(1, #self:Focusables(region))
@@ -927,6 +1004,8 @@ function FS:RenderRegion(region)
         self.Character:RenderList()
     elseif region == "grid" then
         self.Bags:Render()
+    elseif region == "strip" then
+        self.Bags:RenderStrip()
     end
 end
 
@@ -2046,8 +2125,89 @@ end
 
 
 
-function FS:CompareLines(slots)
+
+
+local function ComparisonItem(makeLocation, link)
+    local guid
+    if ItemLocation and C_Item and C_Item.GetItemGUID then
+        local okLoc, location = pcall(makeLocation)
+        if okLoc and location then
+            local okGuid, found = pcall(C_Item.GetItemGUID, location)
+            guid = okGuid and found or nil
+        end
+    end
+    local okLink, hyperlink = pcall(link)
+    hyperlink = okLink and hyperlink or nil
+    if not guid and not hyperlink then
+        return nil
+    end
+    return { guid = guid, hyperlink = hyperlink }
+end
+
+
+
+
+
+
+
+
+
+
+
+
+local function StatChanges(item, slot)
+    if not (item and item.bag and item.slot) then
+        return nil
+    end
+    if not (C_TooltipComparison and C_TooltipComparison.GetItemComparisonDelta) then
+        return nil
+    end
+    local bagItem = ComparisonItem(function()
+        return ItemLocation:CreateFromBagAndSlot(item.bag, item.slot)
+    end, function()
+        return C_Container.GetContainerItemLink(item.bag, item.slot)
+    end)
+    local wornItem = ComparisonItem(function()
+        return ItemLocation:CreateFromEquipmentSlot(slot)
+    end, function()
+        return GetInventoryItemLink("player", slot)
+    end)
+    if not (bagItem and wornItem) then
+        return nil
+    end
+    local ok, delta = pcall(C_TooltipComparison.GetItemComparisonDelta, bagItem, wornItem, nil, false)
+    if not ok or type(delta) ~= "table" then
+        return nil
+    end
+    local out = {}
+    for _, text in ipairs(delta) do
+        if type(text) == "string" and text ~= "" then
+            out[#out + 1] = text
+        end
+    end
+    return #out > 0 and out or nil
+end
+
+
+
+
+
+function FS:CompareLines(slots, item)
     local lines = {}
+    local function AddChanges(slot)
+        local changes = StatChanges(item, slot)
+        if not changes then
+            return
+        end
+        lines[#lines + 1] = { leftText = _G.ITEM_DELTA_DESCRIPTION
+            or "If you replace this item, the following stat changes will occur:", leftColor = GoldColour() }
+        for _, text in ipairs(changes) do
+            
+            
+            lines[#lines + 1] = { leftText = text, leftColor = not text:find("|c", 1, true) and { r = 1, g = 1, b = 1 } or nil }
+        end
+        lines[#lines + 1] = { leftText = "" }
+    end
     for i, slot in ipairs(slots) do
         if i > 1 then
             lines[#lines + 1] = { leftText = "" }
@@ -2057,12 +2217,14 @@ function FS:CompareLines(slots)
         local worn = data and data.lines
         if worn and #worn > 0 then
             lines[#lines + 1] = { leftText = label, leftColor = GoldColour() }
+            AddChanges(slot)
             for _, line in ipairs(worn) do
                 lines[#lines + 1] = line
             end
         elseif GetInventoryItemID and GetInventoryItemID("player", slot) then
             
             lines[#lines + 1] = { leftText = label, leftColor = GoldColour() }
+            AddChanges(slot)
             lines[#lines + 1] = { leftText = "Loading..." }
         else
             lines[#lines + 1] = { leftText = "Nothing equipped: " .. label, leftColor = FS.MUTED }
@@ -2248,10 +2410,10 @@ function FS:Describe()
     end
     local plugin = UI.halves.plugin
     if pin then
-        self:RenderHalf(plugin, "Equipped (Pinned)", self:CompareLines(FS.CompareSlots(pin) or {}),
+        self:RenderHalf(plugin, "Equipped (Pinned)", self:CompareLines(FS.CompareSlots(pin) or {}, pin),
             "pinned:" .. tostring(ItemKey(pin)))
     else
-        self:RenderHalf(plugin, "Equipped", self:CompareLines(slots or {}), "compare:" .. tostring(ItemKey(top)))
+        self:RenderHalf(plugin, "Equipped", self:CompareLines(slots or {}, top), "compare:" .. tostring(ItemKey(top)))
     end
 end
 
@@ -2499,6 +2661,21 @@ function FS:LogGlyphStrings()
     for _, key in ipairs({ "PADLSHOULDER", "PADRSHOULDER", "PAD1" }) do
         local ok, glyph = pcall(function() return PH and PH.Glyph and PH.Glyph(key) end)
         Log("glyph %s = %s", key, ok and Raw(glyph) or ("error " .. tostring(glyph)))
+    end
+    
+    
+    local probe = UIParent and UIParent.CreateTexture and UIParent:CreateTexture(nil, "BACKGROUND")
+    for _, key in ipairs({ "PADLSHOULDER", "PADRSHOULDER" }) do
+        local okAtlas, atlas = pcall(function() return PH and PH.GlyphAtlas and PH.GlyphAtlas(key) end)
+        local accepted = "no atlas"
+        if okAtlas and atlas and probe then
+            local okSet, result = pcall(probe.SetAtlas, probe, atlas, false)
+            accepted = okSet and ("SetAtlas returned " .. tostring(result)) or ("SetAtlas error " .. tostring(result))
+        end
+        Log("glyph atlas %s = %s (%s)", key, okAtlas and tostring(atlas) or ("error " .. tostring(atlas)), accepted)
+    end
+    if probe and probe.Hide then
+        probe:Hide()
     end
     Log("ACTION_LABEL_SELECT = %s", Raw(_G.ACTION_LABEL_SELECT))
 end
@@ -2824,6 +3001,8 @@ function FS:OnButtonUp(button)
         end)
         return
     end
+    
+    self.Actions:OnPadUp(button)
     if self.ignored then
         self.ignored[button] = nil
     end

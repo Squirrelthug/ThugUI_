@@ -1,5 +1,21 @@
 # ThugUI
 
+## 2.6.1
+
+- New (WoW Forever, controller): double-tap Select to reload the interface,
+  in combat too. One tap shows "Tap again to reload". Switch it off on the
+  Controller page.
+- New (Full-screen inventory): "Bind to controller button" in an item's Y
+  menu. Press the button you want it on; hold L2, R2 or both for the other
+  bars. B goes back to the menu. It never opens the game's binding screen,
+  so your controller keeps working afterwards.
+- New (Full-screen inventory): moving onto gear in your bags shows the stat
+  changes against what you wear, under each slot's name.
+- New (Full-screen inventory): size sliders for the equipped items, armor
+  chest, inventory tabs, reagent strip and bag slots.
+- Fixed (Full-screen inventory): the L1/R1 icons at the ends of the tab rows
+  showed as text.
+
 ## 2.6.0
 
 - New (WoW Forever, controller, experimental): the Full-screen inventory

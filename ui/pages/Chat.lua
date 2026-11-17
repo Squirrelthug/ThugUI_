@@ -464,6 +464,18 @@ local function Build(panel)
     end
     
     
+    panel:Checkbox{
+        label = "Double-tap Select to reload",
+        tooltip = "Tap Select twice quickly to reload the interface. Works in combat.",
+        get = function() return not (ThugUIDB.ControllerMode and ThugUIDB.ControllerMode.stickReload == false) end,
+        set = function(v)
+            ThugUIDB.ControllerMode = ThugUIDB.ControllerMode or {}
+            ThugUIDB.ControllerMode.stickReload = v and true or false
+            if ThugUI.StickReload then ThugUI.StickReload:Refresh() end
+        end,
+    }
+    
+    
 
 
     
