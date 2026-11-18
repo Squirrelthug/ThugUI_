@@ -20,6 +20,19 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 local ThugUI = _G.ThugUI
 ThugUI.Dialogs = ThugUI.Dialogs or {}
 local D = {}
@@ -64,6 +77,19 @@ local function Build()
     f.editBox = edit
     function f:GetEditBox() return self.editBox end
 
+    
+    local hint = Paint(f:CreateFontString(nil, "OVERLAY", ThugUI.Theme:Font("GameFontDisableSmall")), "note")
+    hint:SetWidth(WIDTH - PAD * 2)
+    hint:SetJustifyH("CENTER")
+    hint:Hide()
+    f.hint = hint
+
+    f:SetScript("OnGamePadButtonDown", function(self, button) D:PadButton(button) end)
+    
+    f:SetScript("OnEvent", function(self, event)
+        if event == "PLAYER_REGEN_DISABLED" then D:SetPad(false) end
+    end)
+
     f.buttons = {}
     for i = 1, 3 do
         local b = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
@@ -78,6 +104,7 @@ local function Build()
     f:SetScript("OnHide", function(self)
         local def, data, handled = self.def, self.data, self.handled
         self.def, self.data, self.handled = nil, nil, nil
+        D:SetPad(false)
         if def and not handled and def.OnCancel then
             pcall(def.OnCancel, self, data, "escape")
         end
@@ -93,6 +120,75 @@ local function Format(fmt, a1, a2)
     if not fmt:find("%%s") then return fmt end
     local ok, out = pcall(string.format, fmt, a1 ~= nil and tostring(a1) or "", a2 ~= nil and tostring(a2) or "")
     return ok and out or fmt
+end
+
+
+
+function D:PadWanted()
+    local CM = ThugUI.ControllerMode
+    if not CM then return false end
+    for _, fn in ipairs({ CM.IsActive, CM.IsGamepadUI }) do
+        if type(fn) == "function" then
+            local ok, on = pcall(fn, CM)
+            if ok and on then return true end
+        end
+    end
+    return false
+end
+
+
+local function ShownButtons(f)
+    local list = {}
+    for i = 1, 3 do
+        if f.buttons[i]:IsShown() then list[#list + 1] = i end
+    end
+    return list
+end
+
+local function MarkFocus(f)
+    for i = 1, 3 do
+        local b = f.buttons[i]
+        if b.UnlockHighlight then b:UnlockHighlight() end
+        if f.padOn and i == f.focus and b.LockHighlight then b:LockHighlight() end
+    end
+end
+
+
+
+
+function D:SetPad(on)
+    local f = frame
+    if not f then return end
+    if on and InCombatLockdown() then on = false end
+    local ok, err = pcall(f.EnableGamePadButton, f, on and true or false)
+    if not ok then
+        on = false
+        if ThugUI.Diagnostics then ThugUI.Diagnostics:LogOnce("dialogpad", "DIALOG", "pad not taken: %s", tostring(err)) end
+    end
+    f.padOn = on and true or false
+    if f.padOn then f:RegisterEvent("PLAYER_REGEN_DISABLED") else f:UnregisterEvent("PLAYER_REGEN_DISABLED") end
+    f.hint:SetShown(f.padOn)
+    MarkFocus(f)
+end
+
+
+
+function D:PadButton(button)
+    local f = frame
+    if not (f and f:IsShown() and f.padOn) then return end
+    if button == "PADDLEFT" or button == "PADDRIGHT" then
+        local list = ShownButtons(f)
+        local at = 1
+        for n, i in ipairs(list) do if i == f.focus then at = n end end
+        at = at + (button == "PADDRIGHT" and 1 or -1)
+        if at < 1 then at = #list elseif at > #list then at = 1 end
+        f.focus = list[at]
+        MarkFocus(f)
+    elseif button == "PAD1" then
+        if f.focus then self:Click(f.focus) end
+    elseif button == "PAD2" then
+        f:Hide()
+    end
 end
 
 
@@ -145,9 +241,24 @@ function D:Show(which, a1, a2, data)
         b:Show()
         x = x + BUTTON_W + 8
     end
-    y = y + BUTTON_H + PAD
+    y = y + BUTTON_H
+
+    
+    local shown = ShownButtons(f)
+    f.focus = shown[1]
+    if def.padFocus and f.buttons[def.padFocus] and f.buttons[def.padFocus]:IsShown() then f.focus = def.padFocus end
+    local padOn = self:PadWanted() and not InCombatLockdown()
+    if padOn then
+        local G = ThugUI.PadHints and ThugUI.PadHints.Glyph or function(k) return k end
+        f.hint:SetText(G("PADDLEFT") .. G("PADDRIGHT") .. " choose    " .. G("PAD1") .. " select    " .. G("PAD2") .. " close")
+        f.hint:ClearAllPoints()
+        f.hint:SetPoint("TOP", f, "TOP", 0, -(y + 8))
+        y = y + 8 + 18
+    end
+    y = y + PAD
     f:SetHeight(y)
     f:Show()
+    self:SetPad(padOn)
     if def.OnShow then pcall(def.OnShow, f, data) end
     return f
 end

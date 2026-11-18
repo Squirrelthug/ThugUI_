@@ -1,5 +1,23 @@
 # ThugUI
 
+## 2.7.0
+
+- New (Full-screen inventory): bag space as gauges in the footer. A
+  backpack icon and a bar for your normal bags, filled by the slots used,
+  with the slots left written on it. Profession bags, quivers, ammo pouches
+  and the reagent bag each get their own gauge beside it with the bag's own
+  icon, so "Bags" is only the space any loot can go in. A full kind says
+  "Full" and turns red.
+- New: a notice when another addon does the same job as a ThugUI module
+  (Bartender4, Plater, ElvUI and others). "Turn ours off" switches only that
+  part of ThugUI off; "Don't show again" stops asking about that addon.
+- New (controller): ThugUI's popups answer to the pad. D-pad moves between
+  the buttons, Cross presses, Circle closes.
+- Changed (controller wheel): a slice that acts closes the wheel; Circle
+  steps back one level.
+- Fixed (WoW Forever, controller): the pet bar no longer lands on the
+  controller's stuck "S" page.
+
 ## 2.6.1
 
 - New (WoW Forever, controller): double-tap Select to reload the interface,

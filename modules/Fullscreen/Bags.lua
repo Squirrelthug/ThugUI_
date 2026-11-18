@@ -67,7 +67,10 @@ function B:Build(column)
         b.underline:SetHeight(2)
         self.tabs[tab] = b
     end
-    self.counts = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    
+    
+    self.spaceRow = CreateFrame("Frame", nil, self.frame)
+    self.gauges = {}
     self.slotBar = CreateFrame("Frame", nil, self.frame)
     
     self.glyphs = FS.TabGlyphs(self.frame)
@@ -141,10 +144,12 @@ function B:Layout(width, height, size, cell)
         self.slotBar:ClearAllPoints()
         self.slotBar:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 0, 0)
         self.slotBar:SetSize(width, barH)
-        self.counts:SetFont(STANDARD_TEXT_FONT, small)
-        self.counts:ClearAllPoints()
-        self.counts:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 0, barH + 6)
-        self.stripBottom = barH + 6 + small + 4 + 6
+        local rowH = small + 8
+        self.spaceRow:ClearAllPoints()
+        self.spaceRow:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 0, barH + 6)
+        self.spaceRow:SetSize(width, rowH)
+        self.spaceFont = small
+        self.stripBottom = barH + 6 + rowH + 6
         self.cellX0 = 0
         self.stripX0 = 0
         local gridH = height - self.gridTop - self.stripBottom - stripH - 8
@@ -184,9 +189,11 @@ function B:Layout(width, height, size, cell)
     self.slotBar:ClearAllPoints()
     self.slotBar:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", wp + 2, wp)
     self.slotBar:SetSize(width - 2 * wp - 4, barH - 2 * wp)
-    self.counts:SetFont(STANDARD_TEXT_FONT, small)
-    self.counts:ClearAllPoints()
-    self.counts:SetPoint("LEFT", self.frame, "BOTTOMLEFT", 28, footerBottom + footerH / 2)
+    
+    self.spaceRow:ClearAllPoints()
+    self.spaceRow:SetPoint("LEFT", self.frame, "BOTTOMLEFT", 24, footerBottom + footerH / 2)
+    self.spaceRow:SetSize(math.max(40, width - 48), footerH - 6)
+    self.spaceFont = small
     self.scroll.rows = math.max(1, math.floor((gridWellH - 2 * wp + gap) / (gridCell + gap)))
 end
 
@@ -223,20 +230,12 @@ function B:Skin()
         if wells.divider.line then
             wells.divider.line:Fill(wells.divider.holder)
         end
+        
+        
         wells.footer = { holder = CreateFrame("Frame", nil, self.frame) }
         wells.footer.bar = Skin.Piece(self.frame, "cmp_footer_bar", "BACKGROUND", 1)
-        wells.footer.track = Skin.Piece(self.frame, "cmp_progress_bar_track", "ARTWORK", 1)
-        wells.footer.fill = Skin.Piece(self.frame, "cmp_progress_bar_fill", "ARTWORK", 2)
-        wells.footer.meter = CreateFrame("Frame", nil, self.frame)
-        wells.footer.fillHolder = CreateFrame("Frame", nil, self.frame)
         if wells.footer.bar then
             wells.footer.bar:Fill(wells.footer.holder)
-        end
-        if wells.footer.track then
-            wells.footer.track:Fill(wells.footer.meter)
-        end
-        if wells.footer.fill then
-            wells.footer.fill:Fill(wells.footer.fillHolder)
         end
         self.wells = wells
         self.gridBar = Skin.Scrollbar(self.frame)
@@ -263,10 +262,6 @@ function B:Skin()
         end
     end
     if framed then
-        
-        wells.footer.meter:ClearAllPoints()
-        wells.footer.meter:SetPoint("RIGHT", wells.footer.holder, "RIGHT", -24, 0)
-        wells.footer.meter:SetSize(96, 20)
         if self.gridBar then
             local grid = self.rects.grid
             self.gridBar:Anchor(self.frame, grid[3] - SK.WELL_PAD - SK.SCROLL_W, -(grid[2] + SK.WELL_PAD),
@@ -277,7 +272,6 @@ function B:Skin()
             self.stripBar:Anchor(self.frame, strip[3] - SK.WELL_PAD - SK.SCROLL_W, -(strip[2] + SK.WELL_PAD),
                 strip[4] - 2 * SK.WELL_PAD)
         end
-        self:UpdateMeter()
         self:UpdateBar()
     else
         
@@ -288,23 +282,7 @@ function B:Skin()
             self.stripBar.holder:Hide()
         end
     end
-end
-
-
-
-function B:UpdateMeter()
-    local footer = self.wells and self.wells.footer
-    if not (footer and footer.fill and FS.Framed() and self.rects) then
-        return
-    end
-    local frac = self.total > 0 and math.min(1, self.used / self.total) or 0
-    local w = math.floor(96 * frac)
-    footer.fill:SetTint(FS.GOLD[1], FS.GOLD[2], FS.GOLD[3], 1)
-    footer.meterWidth = w
-    footer.fill:SetShown(w >= 16)
-    footer.fillHolder:ClearAllPoints()
-    footer.fillHolder:SetPoint("LEFT", footer.meter, "LEFT", 0, 0)
-    footer.fillHolder:SetSize(math.max(w, 1), 20)
+    self:RenderSpace()
 end
 
 
@@ -322,22 +300,288 @@ function B:UpdateBar()
     end
 end
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function B.BagKindName(bag, subtypeOnly)
+    local c = _G.C_Container
+    local toInv = (c and c.ContainerIDToInventoryID) or _G.ContainerIDToInventoryID
+    local okInv, inv = pcall(toInv or error, bag)
+    local id = okInv and type(inv) == "number" and GetInventoryItemID and GetInventoryItemID("player", inv)
+    local instant = (_G.C_Item and _G.C_Item.GetItemInfoInstant) or _G.GetItemInfoInstant
+    if id and instant then
+        local ok, _, _, subType = pcall(instant, id)
+        if ok and type(subType) == "string" and subType ~= "" then
+            return subType
+        end
+    end
+    if subtypeOnly then
+        return nil
+    end
+    local name = c and c.GetBagName and c.GetBagName(bag)
+    return (type(name) == "string" and name ~= "") and name or nil
+end
+
+
+function B.BagIcon(bag)
+    local c = _G.C_Container
+    local toInv = (c and c.ContainerIDToInventoryID) or _G.ContainerIDToInventoryID
+    local okInv, inv = pcall(toInv or error, bag)
+    local tex = okInv and type(inv) == "number" and GetInventoryItemTexture and GetInventoryItemTexture("player", inv)
+    return tex or EMPTY_BAG
+end
+
+
+
+local function KindKey(bag, family)
+    if bag > (_G.NUM_BAG_SLOTS or 4) then
+        return "reagent"
+    end
+    if not family or family == 0 then
+        return "plain"
+    end
+    return tostring(family)
+end
+
+
+
+
+
+local function AddSpace(space, bag, n, used)
+    if n <= 0 then
+        return
+    end
+    local family = 0
+    if C_Container and C_Container.GetContainerNumFreeSlots then
+        local ok, _, fam = pcall(C_Container.GetContainerNumFreeSlots, bag)
+        if ok then
+            family = tonumber(fam) or 0
+        end
+    end
+    local free = math.max(0, n - used)
+    local key = KindKey(bag, family)
+    local entry = space.byKey[key]
+    if not entry then
+        local label = key == "plain" and "Bags" or B.BagKindName(bag)
+            or (key == "reagent" and "Reagent bag" or "Special bag")
+        entry = { key = key, label = label, free = 0, total = 0, icons = {} }
+        space.byKey[key] = entry
+        
+        space[#space + 1] = entry
+    end
+    entry.free = entry.free + free
+    entry.total = entry.total + n
+    
+    
+    if key == "plain" then
+        entry.icons[1] = EMPTY_BAG
+    else
+        entry.icons[#entry.icons + 1] = B.BagIcon(bag)
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+local GAUGE_GAP = 12
+local ICON_BAR_GAP = 4
+local FULL_RED = { 0.80, 0.18, 0.12 }
+
+local function MakeGauge(row)
+    local g = { icons = {} }
+    g.holder = CreateFrame("Frame", nil, row)
+    g.bar = CreateFrame("Frame", nil, g.holder)
+    
+    
+    g.fillHolder = CreateFrame("Frame", nil, g.bar)
+    g.flatTrack = g.bar:CreateTexture(nil, "BACKGROUND")
+    g.flatTrack:SetAllPoints(g.bar)
+    g.flatTrack:SetColorTexture(0, 0, 0, 0.55)
+    g.flatFill = g.bar:CreateTexture(nil, "ARTWORK")
+    g.flatFill:SetAllPoints(g.fillHolder)
+    g.label = g.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    g.label:SetJustifyH("LEFT")
+    g.label:SetWordWrap(false)
+    g.left = g.bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    g.left:SetJustifyH("RIGHT")
+    return g
+end
+
+
+local function GaugeArt(g)
+    if g.artTried then
+        return
+    end
+    g.artTried = true
+    local Skin = FS.Skin
+    g.track = Skin and Skin.Piece(g.bar, "cmp_progress_bar_track", "BORDER", 1)
+    g.fill = Skin and Skin.Piece(g.bar, "cmp_progress_bar_fill", "ARTWORK", 2)
+    if g.track then
+        g.track:Fill(g.bar)
+    end
+    if g.fill then
+        g.fill:Fill(g.fillHolder)
+    end
+end
+
+local function GaugeIcon(g, i)
+    local t = g.icons[i]
+    if not t then
+        t = g.holder:CreateTexture(nil, "ARTWORK", nil, math.min(i, 7))
+        g.icons[i] = t
+    end
+    return t
+end
+
+
+function B.GaugeWords(e)
+    if e.free <= 0 then
+        return e.label, "Full"
+    end
+    return e.label, e.free .. " left"
+end
+
+
+function B:RenderSpace()
+    local row = self.spaceRow
+    if not row then
+        return
+    end
+    local space = self.space or {}
+    local rowW, rowH = row:GetWidth() or 0, row:GetHeight() or 0
+    local font = self.spaceFont or 10
+    local framed = FS.Framed() and self.rects ~= nil
+    local iconSize = math.max(8, math.floor(rowH))
+    local step = math.floor(iconSize / 2)
+    
+    local fixed, weights = 0, 0
+    for i, e in ipairs(space) do
+        local n = math.max(1, #e.icons)
+        e.iconsW = iconSize + (n - 1) * step
+        fixed = fixed + e.iconsW + ICON_BAR_GAP + (i > 1 and GAUGE_GAP or 0)
+        weights = weights + (e.key == "plain" and 2 or 1)
+    end
+    local barRoom = math.max(0, rowW - fixed)
+    local x = 0
+    for i, e in ipairs(space) do
+        local g = self.gauges[i] or MakeGauge(row)
+        self.gauges[i] = g
+        local share = e.key == "plain" and 2 or 1
+        local barW = math.max(24, math.floor(barRoom * share / math.max(1, weights)))
+        local w = e.iconsW + ICON_BAR_GAP + barW
+        g.holder:ClearAllPoints()
+        g.holder:SetPoint("LEFT", row, "LEFT", x, 0)
+        g.holder:SetSize(w, rowH)
+        g.holder:Show()
+        
+        for j, tex in ipairs(e.icons) do
+            local t = GaugeIcon(g, j)
+            t:SetTexture(tex)
+            t:ClearAllPoints()
+            t:SetPoint("LEFT", g.holder, "LEFT", (j - 1) * step, 0)
+            t:SetSize(iconSize, iconSize)
+            t:Show()
+        end
+        for j = #e.icons + 1, #g.icons do
+            g.icons[j]:Hide()
+        end
+        
+        local barH = math.max(8, rowH - 4)
+        g.bar:ClearAllPoints()
+        g.bar:SetPoint("LEFT", g.holder, "LEFT", e.iconsW + ICON_BAR_GAP, 0)
+        g.bar:SetSize(barW, barH)
+        local used = math.max(0, e.total - e.free)
+        local frac = e.total > 0 and math.min(1, used / e.total) or 0
+        local fillW = math.floor(barW * frac)
+        g.fillW = fillW
+        g.fillHolder:ClearAllPoints()
+        g.fillHolder:SetPoint("LEFT", g.bar, "LEFT", 0, 0)
+        g.fillHolder:SetSize(math.max(fillW, 1), barH)
+        local c = e.free <= 0 and FULL_RED or FS.GOLD
+        if framed then
+            GaugeArt(g)
+        end
+        local art = (framed and g.track and g.fill) and true or false
+        if g.track then
+            g.track:SetShown(art)
+        end
+        if g.fill then
+            g.fill:SetTint(c[1], c[2], c[3], 1)
+            
+            g.fill:SetShown(art and fillW >= 16)
+        end
+        g.flatTrack:SetShown(not art)
+        g.flatFill:SetColorTexture(c[1], c[2], c[3], 0.85)
+        g.flatFill:SetShown(not art and fillW >= 1)
+        
+        local name, left = B.GaugeWords(e)
+        g.label:SetFont(STANDARD_TEXT_FONT, font, "OUTLINE")
+        g.left:SetFont(STANDARD_TEXT_FONT, font, "OUTLINE")
+        g.left:SetText(left)
+        g.left:ClearAllPoints()
+        g.left:SetPoint("RIGHT", g.bar, "RIGHT", -6, 0)
+        local leftW = (g.left.GetStringWidth and g.left:GetStringWidth()) or 0
+        if type(leftW) ~= "number" then
+            leftW = 0
+        end
+        g.label:SetText(name)
+        g.label:ClearAllPoints()
+        g.label:SetPoint("LEFT", g.bar, "LEFT", 6, 0)
+        g.label:SetWidth(math.max(1, barW - 12 - leftW - 6))
+        g.entry = e
+        x = x + w + GAUGE_GAP
+    end
+    for i = #space + 1, #self.gauges do
+        self.gauges[i].holder:Hide()
+    end
+end
+
 function B:Collect()
     self.items = EmptyItems()
+    self.space = { byKey = {} }
     local used = 0
     local total = 0
     for bag = 0, MaxBag() do
         local n = (C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag)) or 0
         total = total + n
+        local inBag = 0
         for slot = 1, n do
             local info = FS.Classify.Read(bag, slot)
             if info then
                 used = used + 1
+                inBag = inBag + 1
                 local place = FS.Classify.Place(info)
                 local list = self.items[place]
                 list[#list + 1] = info
             end
         end
+        AddSpace(self.space, bag, n, inBag)
     end
     self.used = used
     self.total = total
@@ -519,10 +763,7 @@ function B:Update()
     if self:RenderStrip(StripItems(self.items)) then
         short = true
     end
-    local armor = #self.items.armor
-    self.counts:SetText(string.format("%d of %d slots used%s", self.used, self.total,
-        armor > 0 and (", " .. armor .. " by armor chest") or ""))
-    self:UpdateMeter()
+    self:RenderSpace()
     if self:RenderSlots() then
         short = true
     end
@@ -562,7 +803,9 @@ function B:DescribeSlot(item)
     end
     local slots = C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag)
     slots = slots or item.slots or 0
-    local kind = family == 0 and "Bag" or ("Special bag (family " .. family .. ")")
+    
+    
+    local kind = family == 0 and "Bag" or ((B.BagKindName(bag, true) or "Special bag") .. ": holds only its own kind")
     local lines = {
         { leftText = name },
         { leftText = slots .. " slots, " .. free .. " free" },

@@ -27,6 +27,9 @@
 
 
 
+
+
+
 local ThugUI = _G.ThugUI
 local ControllerRadial = {}
 ThugUI.ControllerRadial = ControllerRadial
@@ -73,6 +76,8 @@ local function Crumb(text)
 end
 
 local function Refuse(msg)
+    
+    ControllerRadial.refused = true
     if UIErrorsFrame and UIErrorsFrame.AddMessage then
         UIErrorsFrame:AddMessage(msg, 1, 0.1, 0.1, 1)
     end
@@ -135,6 +140,7 @@ end
 
 local function MarkerFallback()
     Log("GROUP: Cross reached the wheel, not the cast button")
+    ControllerRadial.refused = true   
     if UIErrorsFrame and UIErrorsFrame.AddMessage then
         UIErrorsFrame:AddMessage("Hold the stick on it and press the confirm button.", 1, 0.82, 0)
     end
@@ -182,7 +188,6 @@ local GROUP = {
             isEnabled = Safe(function() return UnitExists("target") end),
             disabledMsg = "You have no target.",
             action = function() ControllerRadial:EnterSub("marks") end,
-            stayOpen = true,
         },
         [4] = {
             label = "Clear mark",
@@ -190,7 +195,6 @@ local GROUP = {
             disabledMsg = "You have no target.",
             
             
-            stayOpen = true,
             action = function()
                 ControllerRadial:EnterSub("marks")
                 if ControllerRadial.pages and ControllerRadial.pages[2] then
@@ -430,7 +434,6 @@ function ControllerRadial:TrackingEntries()
                 label = info.name,
                 icon = atlas or info.texture,
                 iconAtlas = atlas and true or false,
-                stayOpen = true,
                 isActive = function()
                     local okA, now = pcall(C_Minimap.GetTrackingInfo, index)
                     return okA and now and now.active and true or false
@@ -492,7 +495,6 @@ function ControllerRadial:UtilityPage()
             isEnabled = function() return #(ThugUI.Travel:Entries()) > 0 end,
             disabledMsg = "No travel options found.",
             action = function() ControllerRadial:EnterTravel() end,
-            stayOpen = true,
         }
     end
 
@@ -539,7 +541,6 @@ function ControllerRadial:UtilityPage()
             label = "Tracking",
             icon = "professions_tracking_herb",
             iconAtlas = true,
-            stayOpen = true,
             action = function() ControllerRadial:EnterTracking() end,
         }
     end
@@ -569,7 +570,6 @@ function ControllerRadial:PrepPage()
             end,
             isEnabled = function() return #P:Entries(s) > 0 end,
             disabledMsg = "No " .. P.TITLES[s]:lower() .. " in your bags.",
-            stayOpen = true,
             action = function() ControllerRadial:EnterSub("prep_" .. s) end,
         }
     end
@@ -619,7 +619,6 @@ function ControllerRadial:PartyPage()
         icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_8",
         isEnabled = Safe(function() return UnitExists("target") end),
         disabledMsg = "You have no target.",
-        stayOpen = true,
         action = function() ControllerRadial:EnterSub("marks") end,
     }
     page.buttons[5] = {
@@ -688,7 +687,6 @@ local function UnitEntry(row)
     e.isEnabled = function() return usable end
     e.disabledMsg = row.reason
     if row.sub then
-        e.stayOpen = true
         
         
         
@@ -786,7 +784,8 @@ local function ResetSubDial(self)
 
         self.pages = self.savedPages or self.pages
         self.savedPages = nil
-        self.unitPages, self.unitPageIndex, self.unitToken = nil, nil, nil
+        self.subStack = nil
+        self.unitToken = nil
         self.sub = nil
         self.handPick = nil
         self.inTravelMode = false
@@ -795,9 +794,21 @@ local function ResetSubDial(self)
     end
 end
 
+
+
+
+
+local function PushLevel(self)
+    self.subStack = self.subStack or {}
+    table.insert(self.subStack, { pages = self.pages, pageIndex = self.pageIndex, sub = self.sub })
+end
+
 function ControllerRadial:EnterSub(kind)
-    self.savedPages = self.pages
-    self.savedPageIndex = self.pageIndex
+    if not self.sub then
+        self.savedPages = self.pages
+        self.savedPageIndex = self.pageIndex
+    end
+    PushLevel(self)
     self.sub = kind
     self.inTravelMode = (kind == "travel")
     self.pageIndex = 1
@@ -811,25 +822,39 @@ function ControllerRadial:EnterSub(kind)
     end
 end
 
+
+function ControllerRadial:CanStepBack()
+    return self.subStack ~= nil and #self.subStack > 0
+end
+
 function ControllerRadial:LeaveSub()
-    
-    
-    if self.sub == "unit_sub" and self.unitPages then
-        self.pages = self.unitPages
-        self.pageIndex = self.unitPageIndex or 1
-        self.sub = "unit"
-        self.selected = nil
+    local level = self.subStack and table.remove(self.subStack)
+    if not level or not level.sub then
+        
+        ResetSubDial(self)
         self:Draw()
         return
     end
-    ResetSubDial(self)
+    
+    
+    local wasCast = IsCastSub(self.sub)
+    self.pages, self.pageIndex, self.sub = level.pages, level.pageIndex or 1, level.sub
+    self.inTravelMode = (level.sub == "travel")
+    self.handPick = nil
+    self.selected = nil
+    if wasCast and not IsCastSub(level.sub) then
+        ThugUI.Travel:BindCross(false)
+        ThugUI.Travel:Arm(nil)
+    elseif IsCastSub(level.sub) and not (InCombatLockdown and InCombatLockdown()) then
+        ThugUI.Travel:Arm(nil)
+        ThugUI.Travel:BindCross(true)
+    end
     self:Draw()
 end
 
 
 function ControllerRadial:EnterUnitSub(row)
-    self.unitPages = self.pages
-    self.unitPageIndex = self.pageIndex
+    PushLevel(self)
     local rows = row.sub
     
     
@@ -1119,7 +1144,6 @@ function ControllerRadial:RebuildSubPages()
                                 ControllerRadial.handPick = e
                                 ControllerRadial:RebuildSubPages()
                             end,
-                        stayOpen = not cast,
                         travelEntry = cast,
                         altEntry = alt,
                     }
@@ -1363,13 +1387,25 @@ function ControllerRadial:Pick(i)
     Crumb(tostring(label))
     Log("picked %q on %s (combat=%s)", tostring(label),
         tostring(self.pages[self.pageIndex].header), tostring(InCombatLockdown()))
+    
+    
+    
+    
+    
+    
+    local pages, sub, hand = self.pages, self.sub, self.handPick
+    self.refused = false
     local ok, err = pcall(entry.action)
     if not ok then Log("%q failed: %s", tostring(label), tostring(err)) end
-    if entry.stayOpen then
+    local wentDown = self.pages ~= pages or self.sub ~= sub or self.handPick ~= hand
+    if not (frame and frame:IsShown()) then
+        
+    elseif wentDown or self.refused then
         self:Draw()
     else
         self:Close()
     end
+    self.refused = false
     return true
 end
 
@@ -1602,11 +1638,10 @@ local function OnButton(_, button)
             self.handPick = nil
             self:RebuildSubPages()
             self:Draw()
-        elseif self.sub == "unit" then
-            self:Close()
-        elseif self.sub then
+        elseif self:CanStepBack() then
             self:LeaveSub()
         else
+            
             self:Close()
         end
     elseif button == PAD_CONFIRM then

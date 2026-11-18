@@ -15,7 +15,7 @@ do
     local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
     local ok, v = false, nil
     if get then ok, v = pcall(get, "ThugUI", "Version") end
-    ThugUI.version = (ok and type(v) == "string" and v ~= "") and v or "2.6.1"
+    ThugUI.version = (ok and type(v) == "string" and v ~= "") and v or "2.7.0"
 end
 
 
@@ -454,3 +454,54 @@ eventFrame:SetScript("OnEvent", function(self, event, arg1)
         self:UnregisterEvent("ADDON_LOADED")
     end
 end)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+local POSSESS_CVAR, POSSESS_SPECIAL, POSSESS_TARGET = "GamepadPossessBarOverride", "1", 12
+
+function ThugUI.FixPossessBarPage()
+    local get = (C_CVar and C_CVar.GetCVar) or GetCVar
+    if not get or get(POSSESS_CVAR) ~= POSSESS_SPECIAL then
+        ThugUI.possessFixPending = nil
+        return false
+    end
+    if InCombatLockdown and InCombatLockdown() then
+        ThugUI.possessFixPending = true
+        return false
+    end
+    ThugUI.possessFixPending = nil
+    local set = (C_CVar and C_CVar.SetCVar) or SetCVar
+    local ok, err = pcall(set, POSSESS_CVAR, POSSESS_TARGET)
+    if ThugUI.Diagnostics then
+        ThugUI.Diagnostics:Log("INIT", "possess bar S page -> %d: %s", POSSESS_TARGET,
+            ok and "set" or tostring(err))
+    end
+    return ok
+end
+
+if ThugUI.client == "forever" then
+    local possessFrame = CreateFrame("Frame")
+    ThugUI.SafeRegisterEvent(possessFrame, "PLAYER_ENTERING_WORLD")
+    ThugUI.SafeRegisterEvent(possessFrame, "PLAYER_REGEN_ENABLED")
+    ThugUI.SafeRegisterEvent(possessFrame, "GAMEPAD_POSSESS_BAR_OVERRIDE_CHANGED")
+    possessFrame:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_REGEN_ENABLED" and not ThugUI.possessFixPending then return end
+        ThugUI.FixPossessBarPage()
+    end)
+end
