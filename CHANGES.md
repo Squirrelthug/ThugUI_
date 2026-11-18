@@ -1,6 +1,6 @@
 # ThugUI
 
-## 2.7.0
+## 2.6.2
 
 - New (Full-screen inventory): bag space as gauges in the footer. A
   backpack icon and a bar for your normal bags, filled by the slots used,
