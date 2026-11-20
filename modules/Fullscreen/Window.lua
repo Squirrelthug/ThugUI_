@@ -2932,6 +2932,15 @@ function FS:Open()
     if not self:Active() or self.interacting or not OpenCondition() or (UI.frame and UI.frame:IsShown()) then
         return
     end
+    
+    
+    
+    
+    
+    if InCombatLockdown() or self.Actions.combatSoon then
+        Log("in combat: Blizzard's own window left to it")
+        return
+    end
     if not self:ArmInput() and InCombatLockdown() then
         Log("not opened in combat (input not armed)")
         return

@@ -1,5 +1,18 @@
 # ThugUI
 
+## 3.0.1
+
+- Changed (Full-screen window, controller): in combat the bags are
+  Blizzard's. Opening the bags mid-fight shows Blizzard's own bag, whose
+  controller cursor can use a potion; ThugUI's window is back the next time
+  you open the bags out of combat. With "Close when combat starts" off, the
+  window says to close it to use items from Blizzard's bag.
+- Fixed (Full-screen window): items that open ("Right Click to Open", like a
+  barnacle or a satchel) can be opened from the window: they are on the
+  Usable tab, and the left face button says Open.
+- Changed (Orbs): the resource orb's "Only show when not full" now has the
+  same label as the health orb's; the rage note is in the tooltip.
+
 ## 3.0.0
 
 - New (WoW Forever, controller): the Pad layout page (Settings, Controller).

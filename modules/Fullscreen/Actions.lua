@@ -77,7 +77,9 @@ end
 
 
 
-local MSG_SWITCH = "Items can't be used from this window in combat"
+
+
+local MSG_SWITCH = "In combat, close this window to use items from Blizzard's bag"
 local MSG_NO_SLOT = "No free bag slot"
 local MSG_REFUSED = "The game refused that"
 local MSG_MOVED = "That item moved"
@@ -173,8 +175,12 @@ end
 
 
 
-local function ActionLabel(kind)
-    if kind == "use" then
+local function ActionLabel(kind, item)
+    if kind == "use" and item and item.hasLoot then
+        
+        
+        return G("OPEN", "Open")
+    elseif kind == "use" then
         return G("CONTEXT_ACTION_LABEL_USE", "Use")
     elseif kind == "equip" then
         return G("CONTEXT_ACTION_LABEL_EQUIP", "Equip")
@@ -183,7 +189,8 @@ local function ActionLabel(kind)
 end
 
 local function IsUsable(item)
-    if item.hasSpell then
+    
+    if item.hasSpell or item.hasLoot then
         return true
     end
     if C_Item and C_Item.IsUsableItem and item.itemID then
@@ -223,7 +230,7 @@ function A.MainAction(item)
         return nil
     end
     return {
-        kind = kind, label = ActionLabel(kind), bag = item.bag, slot = item.slot,
+        kind = kind, label = ActionLabel(kind, item), bag = item.bag, slot = item.slot,
         itemID = item.itemID, refusal = FS.Refusal(item),
     }
 end

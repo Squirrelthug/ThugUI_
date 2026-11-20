@@ -141,10 +141,15 @@ local function OrbSection(panel, key, label)
     end
     panel:Group("Orb rules (these win over everything above)")
     panel:Checkbox{
-        label = key == "health" and "Only show when not full" or "Only show when not at rest (full, or empty for rage)",
+        
+        
+        
+        label = "Only show when not full",
         tooltip = "Ticked, this outranks the settings above: whenever the orb is not full it "
             .. "is fully shown, whatever Show, resting or the opacities say. When full it hides, "
-            .. "unless a target or soft target shows it at that opacity.",
+            .. "unless a target or soft target shows it at that opacity."
+            .. (key == "health" and "" or " Rage rests at empty, so a rage orb shows while it is not empty.")
+            .. " Each layer's own tab (Faction art, Orb, Ring, Art) still applies its own rules on top.",
         get = function() return Cfg(key).hideWhenFull end,
         set = function(v) Cfg(key).hideWhenFull = v; Call(key) end,
     }

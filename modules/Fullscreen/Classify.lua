@@ -126,7 +126,7 @@ function C.Place(info)
     if info.classID == 12 or info.bindType == 4 or info.isQuestItem or info.questID ~= nil then
         return "quest"
     end
-    if info.hasSpell then
+    if info.hasSpell or info.hasLoot then
         return "usable"
     end
     return "inventory"
@@ -157,7 +157,7 @@ function C.Read(bag, slot)
         isLocked = ci.isLocked, quality = ci.quality, iconFileID = ci.iconFileID,
         name = name, equipLoc = equipLoc, classID = classID, subclassID = subclassID,
         bindType = bindType, equippable = equippable and true or false,
-        hasSpell = spell ~= nil, isQuestItem = quest and quest.isQuestItem,
+        hasSpell = spell ~= nil, hasLoot = ci.hasLoot and true or false, isQuestItem = quest and quest.isQuestItem,
         questID = quest and quest.questID,
     }
 end
