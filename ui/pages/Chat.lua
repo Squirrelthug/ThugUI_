@@ -447,33 +447,8 @@ local function Build(panel)
         "Off: your own Target of Target frame (its page) takes over again, or Blizzard's if that is off.")
     
     
-    do
-        panel:Checkbox{
-            label = "Map on the shortcuts' bottom face button",
-            tooltip = "Blizzard leaves that button empty on the shortcuts bar; this makes it open the world map, "
-                .. "out of combat. Off: the button is empty again, as Blizzard has it.",
-            
-            
-            get = function() return not (ThugUIDB.ControllerMode and ThugUIDB.ControllerMode.mapShortcut == false) end,
-            set = function(v)
-                ThugUIDB.ControllerMode = ThugUIDB.ControllerMode or {}
-                ThugUIDB.ControllerMode.mapShortcut = v and true or false
-                if ThugUI.ControllerMode then ThugUI.ControllerMode:NotifyFeature("mapShortcut") end
-            end,
-        }
-    end
     
-    
-    panel:Checkbox{
-        label = "Double-tap Select to reload",
-        tooltip = "Tap Select twice quickly to reload the interface. Works in combat.",
-        get = function() return not (ThugUIDB.ControllerMode and ThugUIDB.ControllerMode.stickReload == false) end,
-        set = function(v)
-            ThugUIDB.ControllerMode = ThugUIDB.ControllerMode or {}
-            ThugUIDB.ControllerMode.stickReload = v and true or false
-            if ThugUI.StickReload then ThugUI.StickReload:Refresh() end
-        end,
-    }
+    panel:Note("The L1+R1 bottom face button is set on the Pad layout page.")
     
     
 

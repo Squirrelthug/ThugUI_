@@ -2,7 +2,7 @@
 ## Title: ThugUI
 ## Notes: Cursor-anchored cooldown grids, action bars, nameplates and unit frames for retail and WoW Forever
 ## Author: Thug
-## Version: 2.6.2
+## Version: 3.0.0
 ## IconTexture: Interface\AddOns\ThugUI\media\Acorn
 ## X-Curse-Project-ID: 1734288
 ## SavedVariables: ThugUI_DebugLog ThugUI_BCVDump ThugUI_Profiles ThugUI_Packs ThugUI_Config ThugUIDB
@@ -25,6 +25,9 @@ modules\Visibility.lua
 ui\Theme.lua
 ui\ThemePresets.lua
 ui\Widgets.lua
+ui\PadParts.lua
+ui\PadSilhouette.lua
+ui\PadChooser.lua
 ui\Dialog.lua
 ui\Window.lua
 ui\CopyWindow.lua
@@ -83,6 +86,7 @@ modules\Fullscreen\Skin.lua
 modules\Fullscreen\Actions.lua
 modules\Fullscreen\Bags.lua
 modules\Fullscreen\Character.lua
+modules\Fullscreen\Target.lua
 
 modules\Fishing.lua
 
@@ -188,5 +192,7 @@ modules\ChatStream.lua
 
 modules\FocusedQuest.lua
 
+modules\PadLayout.lua
+
 modules\FaceButtons.lua
-ui\pages\FaceButtons.lua
+ui\pages\PadLayout.lua

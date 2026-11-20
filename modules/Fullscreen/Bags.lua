@@ -11,6 +11,9 @@ local B = {}
 FS.Bags = B
 
 local TABS = { "inventory", "quest", "usable" }
+
+
+B.TABS = TABS
 local TAB_LABELS = { inventory = "Inventory", quest = "Quest", usable = "Usable" }
 local EMPTY_BAG = "Interface\\Icons\\INV_Misc_Bag_08"
 
@@ -21,6 +24,33 @@ local SHORT_MESSAGE = "Bags will refresh after combat"
 
 local function MaxBag()
     return _G.NUM_TOTAL_EQUIPPED_BAG_SLOTS or _G.NUM_BAG_SLOTS or 4
+end
+
+
+
+
+local MAX_GAUGES = 6
+local GAUGE_H = 22
+local GAUGE_ROW_GAP = 10
+
+
+function B.GaugeRowCounts(n)
+    n = math.min(n or 0, MAX_GAUGES)
+    if n <= 0 then
+        return {}
+    end
+    if n <= 3 then
+        return { n }
+    end
+    if n == 4 then
+        return { 2, 2 }
+    end
+    return { 3, n - 3 }
+end
+
+
+function B:GaugeRows()
+    return math.max(1, #B.GaugeRowCounts(#(self.space or {})))
 end
 
 local function EmptyItems()
@@ -56,6 +86,10 @@ function B:Build(column)
 
     self.title = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     self.title:SetText("Bags")
+    
+    self.money = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    self.money:SetJustifyH("LEFT")
+    self.money:SetWordWrap(false)
     for _, tab in ipairs(TABS) do
         local b = CreateFrame("Frame", nil, self.frame)
         b.label = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -78,6 +112,67 @@ end
 
 
 
+
+
+local COIN_COLOURS = {
+    { "GOLD_AMOUNT_SYMBOL", "ffd70a" },
+    { "SILVER_AMOUNT_SYMBOL", "c7c7cf" },
+    { "COPPER_AMOUNT_SYMBOL", "eda55f" },
+}
+
+local function CoinColour(i)
+    local symbol = _G[COIN_COLOURS[i][1] ]
+    local hex = type(symbol) == "string" and symbol:match("|c%x%x(%x%x%x%x%x%x)")
+    return hex or COIN_COLOURS[i][2]
+end
+
+
+
+
+local function GroupThousands(n)
+    if type(_G.BreakUpLargeNumbers) == "function" then
+        return _G.BreakUpLargeNumbers(n)
+    end
+    local s = tostring(n)
+    local out
+    repeat
+        s, out = s:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+    until out == 0
+    return s
+end
+
+
+
+
+
+
+function B.MoneyText(copper)
+    copper = math.floor(tonumber(copper) or 0)
+    if copper < 0 then
+        copper = 0
+    end
+    local amounts = { math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100 }
+    local parts = {}
+    for i = 1, 3 do
+        if amounts[i] > 0 or #parts > 0 or i == 3 then
+            local text = i == 1 and GroupThousands(amounts[i]) or tostring(amounts[i])
+            parts[#parts + 1] = "|cff" .. CoinColour(i) .. text .. "|r"
+        end
+    end
+    return table.concat(parts, " ")
+end
+
+
+function B:UpdateMoney()
+    if self.money then
+        self.money:SetText(B.MoneyText(GetMoney and GetMoney() or 0))
+    end
+end
+
+
+
+
+local MONEY_GAP = 10
 
 local function Columns(inner, base, size)
     return math.min(FS.FitCount(inner, size), FS.FitCount(COLS * base + (COLS - 1) * FS.GAP, size))
@@ -112,6 +207,26 @@ function B:Layout(width, height, size, cell)
     if not (framed and FS:TitleOnPlate(self.title, "right", size + 6)) then
         self.title:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, 0)
     end
+    
+    
+    
+    
+    
+    self.money:SetFont(STANDARD_TEXT_FONT, size)
+    self.money:ClearAllPoints()
+    local panel = FS.UI and FS.UI.panels and FS.UI.panels.right
+    local plate = framed and panel and panel.skin and panel.skin.plate and panel.skin.plateHolder
+    local titleW = self.title:GetStringWidth() or 0
+    local room
+    if plate then
+        self.money:SetPoint("LEFT", plate, "RIGHT", MONEY_GAP, 0)
+        room = width / 2 - (plate:GetWidth() or 0) / 2
+    else
+        self.money:SetPoint("LEFT", self.title, "RIGHT", MONEY_GAP, 0)
+        room = framed and (width / 2 - titleW / 2) or (width - titleW)
+    end
+    self.money:SetWidth(math.max(1, math.floor(room - MONEY_GAP)))
+    self:UpdateMoney()
 
     local tabH = FS.TabHeight(size)
     
@@ -144,7 +259,9 @@ function B:Layout(width, height, size, cell)
         self.slotBar:ClearAllPoints()
         self.slotBar:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 0, 0)
         self.slotBar:SetSize(width, barH)
-        local rowH = small + 8
+        local rows = self:GaugeRows()
+        self.gaugeRows = rows
+        local rowH = rows * (small + 8) + (rows - 1) * GAUGE_ROW_GAP
         self.spaceRow:ClearAllPoints()
         self.spaceRow:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 0, barH + 6)
         self.spaceRow:SetSize(width, rowH)
@@ -161,7 +278,9 @@ function B:Layout(width, height, size, cell)
     
     local wp = SK.WELL_PAD
     local barH = self.slotSize + small + 4 + 2 * wp
-    local footerH = 28
+    local rows = self:GaugeRows()
+    self.gaugeRows = rows
+    local footerH = rows * GAUGE_H + (rows - 1) * GAUGE_ROW_GAP + 6
     local stripWellH = stripH + 2 * wp
     local footerBottom = barH + 8
     local stripWellBottom = footerBottom + footerH + 8
@@ -408,8 +527,7 @@ end
 
 
 
-
-local GAUGE_GAP = 12
+local GAUGE_GAP = 16
 local ICON_BAR_GAP = 4
 local FULL_RED = { 0.80, 0.18, 0.12 }
 
@@ -477,87 +595,89 @@ function B:RenderSpace()
     local rowW, rowH = row:GetWidth() or 0, row:GetHeight() or 0
     local font = self.spaceFont or 10
     local framed = FS.Framed() and self.rects ~= nil
-    local iconSize = math.max(8, math.floor(rowH))
+    local counts = B.GaugeRowCounts(#space)
+    local nRows = math.max(1, #counts)
+    local gaugeH = math.max(8, math.floor((rowH - (nRows - 1) * GAUGE_ROW_GAP) / nRows))
+    local iconSize = gaugeH
     local step = math.floor(iconSize / 2)
-    
-    local fixed, weights = 0, 0
-    for i, e in ipairs(space) do
-        local n = math.max(1, #e.icons)
-        e.iconsW = iconSize + (n - 1) * step
-        fixed = fixed + e.iconsW + ICON_BAR_GAP + (i > 1 and GAUGE_GAP or 0)
-        weights = weights + (e.key == "plain" and 2 or 1)
-    end
-    local barRoom = math.max(0, rowW - fixed)
-    local x = 0
-    for i, e in ipairs(space) do
-        local g = self.gauges[i] or MakeGauge(row)
-        self.gauges[i] = g
-        local share = e.key == "plain" and 2 or 1
-        local barW = math.max(24, math.floor(barRoom * share / math.max(1, weights)))
-        local w = e.iconsW + ICON_BAR_GAP + barW
-        g.holder:ClearAllPoints()
-        g.holder:SetPoint("LEFT", row, "LEFT", x, 0)
-        g.holder:SetSize(w, rowH)
-        g.holder:Show()
+    local shown = 0
+    for r, perRow in ipairs(counts) do
         
-        for j, tex in ipairs(e.icons) do
-            local t = GaugeIcon(g, j)
-            t:SetTexture(tex)
-            t:ClearAllPoints()
-            t:SetPoint("LEFT", g.holder, "LEFT", (j - 1) * step, 0)
-            t:SetSize(iconSize, iconSize)
-            t:Show()
-        end
-        for j = #e.icons + 1, #g.icons do
-            g.icons[j]:Hide()
-        end
-        
-        local barH = math.max(8, rowH - 4)
-        g.bar:ClearAllPoints()
-        g.bar:SetPoint("LEFT", g.holder, "LEFT", e.iconsW + ICON_BAR_GAP, 0)
-        g.bar:SetSize(barW, barH)
-        local used = math.max(0, e.total - e.free)
-        local frac = e.total > 0 and math.min(1, used / e.total) or 0
-        local fillW = math.floor(barW * frac)
-        g.fillW = fillW
-        g.fillHolder:ClearAllPoints()
-        g.fillHolder:SetPoint("LEFT", g.bar, "LEFT", 0, 0)
-        g.fillHolder:SetSize(math.max(fillW, 1), barH)
-        local c = e.free <= 0 and FULL_RED or FS.GOLD
-        if framed then
-            GaugeArt(g)
-        end
-        local art = (framed and g.track and g.fill) and true or false
-        if g.track then
-            g.track:SetShown(art)
-        end
-        if g.fill then
-            g.fill:SetTint(c[1], c[2], c[3], 1)
+        local w = math.floor((rowW - (perRow - 1) * GAUGE_GAP) / perRow)
+        local y = (r - 1) * (gaugeH + GAUGE_ROW_GAP)
+        for c = 1, perRow do
+            shown = shown + 1
+            local i = shown
+            local e = space[i]
+            local x = (c - 1) * (w + GAUGE_GAP)
+            local g = self.gauges[i] or MakeGauge(row)
+            self.gauges[i] = g
+            local n = math.max(1, #e.icons)
+            e.iconsW = iconSize + (n - 1) * step
+            local barW = math.max(24, w - e.iconsW - ICON_BAR_GAP)
+            g.holder:ClearAllPoints()
+            g.holder:SetPoint("TOPLEFT", row, "TOPLEFT", x, -y)
+            g.holder:SetSize(w, gaugeH)
+            g.holder:Show()
             
-            g.fill:SetShown(art and fillW >= 16)
+            for j, tex in ipairs(e.icons) do
+                local t = GaugeIcon(g, j)
+                t:SetTexture(tex)
+                t:ClearAllPoints()
+                t:SetPoint("LEFT", g.holder, "LEFT", (j - 1) * step, 0)
+                t:SetSize(iconSize, iconSize)
+                t:Show()
+            end
+            for j = #e.icons + 1, #g.icons do
+                g.icons[j]:Hide()
+            end
+            
+            local barH = math.max(8, gaugeH - 4)
+            g.bar:ClearAllPoints()
+            g.bar:SetPoint("LEFT", g.holder, "LEFT", e.iconsW + ICON_BAR_GAP, 0)
+            g.bar:SetSize(barW, barH)
+            local used = math.max(0, e.total - e.free)
+            local frac = e.total > 0 and math.min(1, used / e.total) or 0
+            local fillW = math.floor(barW * frac)
+            g.fillW = fillW
+            g.fillHolder:ClearAllPoints()
+            g.fillHolder:SetPoint("LEFT", g.bar, "LEFT", 0, 0)
+            g.fillHolder:SetSize(math.max(fillW, 1), barH)
+            local c = e.free <= 0 and FULL_RED or FS.GOLD
+            if framed then
+                GaugeArt(g)
+            end
+            local art = (framed and g.track and g.fill) and true or false
+            if g.track then
+                g.track:SetShown(art)
+            end
+            if g.fill then
+                g.fill:SetTint(c[1], c[2], c[3], 1)
+                
+                g.fill:SetShown(art and fillW >= 16)
+            end
+            g.flatTrack:SetShown(not art)
+            g.flatFill:SetColorTexture(c[1], c[2], c[3], 0.85)
+            g.flatFill:SetShown(not art and fillW >= 1)
+            
+            local name, left = B.GaugeWords(e)
+            g.label:SetFont(STANDARD_TEXT_FONT, font, "OUTLINE")
+            g.left:SetFont(STANDARD_TEXT_FONT, font, "OUTLINE")
+            g.left:SetText(left)
+            g.left:ClearAllPoints()
+            g.left:SetPoint("RIGHT", g.bar, "RIGHT", -6, 0)
+            local leftW = (g.left.GetStringWidth and g.left:GetStringWidth()) or 0
+            if type(leftW) ~= "number" then
+                leftW = 0
+            end
+            g.label:SetText(name)
+            g.label:ClearAllPoints()
+            g.label:SetPoint("LEFT", g.bar, "LEFT", 6, 0)
+            g.label:SetWidth(math.max(1, barW - 12 - leftW - 6))
+            g.entry = e
         end
-        g.flatTrack:SetShown(not art)
-        g.flatFill:SetColorTexture(c[1], c[2], c[3], 0.85)
-        g.flatFill:SetShown(not art and fillW >= 1)
-        
-        local name, left = B.GaugeWords(e)
-        g.label:SetFont(STANDARD_TEXT_FONT, font, "OUTLINE")
-        g.left:SetFont(STANDARD_TEXT_FONT, font, "OUTLINE")
-        g.left:SetText(left)
-        g.left:ClearAllPoints()
-        g.left:SetPoint("RIGHT", g.bar, "RIGHT", -6, 0)
-        local leftW = (g.left.GetStringWidth and g.left:GetStringWidth()) or 0
-        if type(leftW) ~= "number" then
-            leftW = 0
-        end
-        g.label:SetText(name)
-        g.label:ClearAllPoints()
-        g.label:SetPoint("LEFT", g.bar, "LEFT", 6, 0)
-        g.label:SetWidth(math.max(1, barW - 12 - leftW - 6))
-        g.entry = e
-        x = x + w + GAUGE_GAP
     end
-    for i = #space + 1, #self.gauges do
+    for i = shown + 1, #self.gauges do
         self.gauges[i].holder:Hide()
     end
 end
@@ -745,6 +865,11 @@ function B:Update()
     if not self.frame then
         return
     end
+    
+    
+    if self.gaugeRows and self.gaugeRows ~= self:GaugeRows() and FS.Layout then
+        FS:Layout()
+    end
     local tab = self.activeTab or "inventory"
     local list = self.items[tab] or {}
     for name, button in pairs(self.tabs) do
@@ -764,6 +889,7 @@ function B:Update()
         short = true
     end
     self:RenderSpace()
+    self:UpdateMoney()
     if self:RenderSlots() then
         short = true
     end
@@ -835,4 +961,26 @@ function B:NextTab(delta)
     end
     self:Update()
     FS:Refocus()
+end
+
+
+
+function B:SetTab(name)
+    local known
+    for _, v in ipairs(TABS) do
+        if v == name then
+            known = true
+        end
+    end
+    if not known or self.activeTab == name then
+        return false
+    end
+    self.activeTab = name
+    self.scroll.offset = 0
+    if FS:CurrentRegion() == "grid" then
+        FS.focusIndex = 1
+    end
+    self:Update()
+    FS:Refocus()
+    return true
 end

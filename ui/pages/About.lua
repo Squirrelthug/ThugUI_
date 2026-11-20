@@ -47,10 +47,12 @@ Page.COMMANDS = {
 Page.DEV_COMMANDS = {
     { "/thugprep dump", "Log how every bag consumable was sorted for Prep." },
     { "/thugcv probe", "Probe cooldown entries into ThugUI_BCVDump." },
+    { "/thugpad", "Dump pad bindings, CVars and glyph atlases into ThugUI_DebugLog.padDump." },
     { "/thugdebug", "Verbose debug logging on or off." },
     { "/thuglog", "Print the debug log." },
     { "/thugbcv", "Capture buffs and probe Balance spells into ThugUI_BCVDump." },
     { "/thugspell", "Probe one spell's ID and texture into ThugUI_BCVDump." },
+    { "/thugfs targetprobe", "While the game waits for an item, try UseContainerItem from Lua on the focused full-screen bag item and log the answer (ITEMTARGET)." },
 }
 
 Page.CREDITS = "Developed by Squirrelthug.\n"

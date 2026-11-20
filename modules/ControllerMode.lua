@@ -64,9 +64,13 @@ local FEATURES = {
         local c = ThugUIDB.GamepadChat
         return not (c and c.enabled == false)
     end,
-    mapShortcut = function()
-        local c = ThugUIDB.ControllerMode
-        return not (c and c.mapShortcut == false)
+    
+    
+    
+    
+    shortcutCross = function()
+        local PL = ThugUI.PadLayout
+        return PL ~= nil and PL:Command("cross") ~= nil
     end,
     target = function()
         local c = ThugUIDB.ControllerTarget

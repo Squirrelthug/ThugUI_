@@ -80,10 +80,78 @@ function F.PoleEquipped()
     return F.IsPole(GetInventoryItemID("player", MAIN))
 end
 
+local function LogOnce(key, message)
+    if ThugUI.Diagnostics then
+        ThugUI.Diagnostics:LogOnce(key, "FISHING", message)
+    end
+end
+
+local function RequestLureData(id)
+    local request = C_Item and C_Item.RequestLoadItemDataByID
+    if request then pcall(request, id) end
+end
+
+local function CanUse(id)
+    local isUsable = C_Item and C_Item.IsUsableItem
+    if not isUsable then
+        LogOnce("FISHING_ITEM_USABLE_UNAVAILABLE", "C_Item.IsUsableItem missing; using lure")
+        return true
+    end
+
+    local ok, usable = pcall(isUsable, id)
+    if not ok then
+        LogOnce("FISHING_ITEM_USABLE_UNAVAILABLE", "C_Item.IsUsableItem failed; using lure")
+        return true
+    end
+    if not (issecretvalue and issecretvalue(usable)) and type(usable) == "boolean" and not usable then
+        LogOnce("FISHING_LURE_SKIP_" .. id, "skipped lure " .. id .. ": not usable")
+        return false
+    end
+
+    local getTooltip = C_TooltipInfo and C_TooltipInfo.GetItemByID
+    if not getTooltip then
+        LogOnce("FISHING_ITEM_TOOLTIP_UNAVAILABLE", "C_TooltipInfo.GetItemByID missing; using lure")
+        return true
+    end
+
+    local gotTooltip, tooltip = pcall(getTooltip, id)
+    if not gotTooltip then
+        LogOnce("FISHING_ITEM_TOOLTIP_UNAVAILABLE", "C_TooltipInfo.GetItemByID failed; using lure")
+        return true
+    end
+    if issecretvalue and issecretvalue(tooltip) then return true end
+
+    local lines = type(tooltip) == "table" and tooltip.lines
+    if issecretvalue and issecretvalue(lines) then return true end
+    if type(lines) ~= "table" or next(lines) == nil then
+        RequestLureData(id)
+        return true
+    end
+
+    
+    
+    for _, line in ipairs(lines) do
+        if not (issecretvalue and issecretvalue(line)) and type(line) == "table" then
+            local text = line.leftText
+            local color = line.leftColor
+            if not (issecretvalue and (issecretvalue(text) or issecretvalue(color))) and type(text) == "string" and type(color) == "table" then
+                local r, g, b = color.r, color.g, color.b
+                if not (issecretvalue and (issecretvalue(r) or issecretvalue(g) or issecretvalue(b)))
+                    and type(r) == "number" and type(g) == "number" and type(b) == "number"
+                    and r > 0.9 and g < 0.2 and b < 0.2 then
+                    LogOnce("FISHING_LURE_SKIP_" .. id, "skipped lure " .. id .. ": red requirement \"" .. text .. "\"")
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
 function F.BestLure()
     if not C_Item or not C_Item.GetItemCount then return nil end
     for _, id in ipairs(LURES) do
-        if C_Item.GetItemCount(id) > 0 then
+        if C_Item.GetItemCount(id) > 0 and CanUse(id) then
             return id
         end
     end
@@ -449,7 +517,7 @@ end
 
 F:SetScript("OnEvent", function(self, event, ...)
     if not ThugUI:IsModuleOn("fishing") then self:UnregisterAllEvents() return end
-    if event == "PLAYER_ENTERING_WORLD" or event == "BAG_UPDATE_DELAYED" or event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_INVENTORY_CHANGED" then
+    if event == "PLAYER_ENTERING_WORLD" or event == "BAG_UPDATE_DELAYED" or event == "SKILL_LINES_CHANGED" or event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_INVENTORY_CHANGED" then
         if event == "UNIT_INVENTORY_CHANGED" then
             local unit = ...
             if unit ~= "player" then return end
@@ -482,6 +550,7 @@ end)
 function F:Initialize()
     ThugUI.SafeRegisterEvent(self, "PLAYER_ENTERING_WORLD")
     ThugUI.SafeRegisterEvent(self, "BAG_UPDATE_DELAYED")
+    ThugUI.SafeRegisterEvent(self, "SKILL_LINES_CHANGED")
     ThugUI.SafeRegisterEvent(self, "PLAYER_EQUIPMENT_CHANGED")
     ThugUI.SafeRegisterEvent(self, "UNIT_INVENTORY_CHANGED")
     ThugUI.SafeRegisterEvent(self, "PLAYER_REGEN_ENABLED")

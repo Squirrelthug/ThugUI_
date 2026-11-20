@@ -1,5 +1,37 @@
 # ThugUI
 
+## 3.0.0
+
+- New (WoW Forever, controller): the Pad layout page (Settings, Controller).
+  Pictures of your PlayStation or Xbox pad in four tabs: face buttons, L1 /
+  R1 + D-pad right, both bumpers held, and the menu buttons. Pick a button
+  and choose what it does from short lists: your macros, spells, ThugUI
+  actions or Blizzard's own. Every button starts on Blizzard's default, a
+  red band warns when a default action no longer has a button, and "Back to
+  Blizzard's defaults" puts everything back.
+- New (controller): Start and Select (Create / View) open windows that close
+  on the same press: the radial, ThugUI menu, map, character, bags,
+  spellbook, talents, quest log, professions, group finder, game menu and
+  Focus UI.
+- New (controller): a double press on Start and on Select, off until you set
+  one: ThugUI menu, reload or screenshot.
+- New (controller): a hold on the PS / Xbox button, off until you set one:
+  ThugUI menu, escape menu or hide the interface. A tap still does the
+  button's single action, on release.
+- New (controller): the ThugUI menu and Blizzard's radial close each other.
+  Start on the ThugUI menu opens Blizzard's radial; your ThugUI menu button
+  on Blizzard's radial opens ours.
+- New (Full-screen inventory): using an item on another item (Shiny Bauble,
+  sharpening stone, enchant) opens the bags with a cyan outline; X applies
+  it, Back cancels, items it fits are ticked when the game knows. The
+  target's icon fills back in as the cast runs, inside a thick ring.
+- New (controller chat): hold D-pad up or down to keep scrolling.
+- Changed (controller): the built-in double presses (Start twice for the
+  ThugUI menu, Select twice to reload, touchpad twice for a screenshot) are
+  gone; set the ones you want on the Pad layout page.
+- Fixed: the fishing macro skipped to lures you cannot use yet (Nightcrawlers
+  below Fishing 50); it now picks the best usable one.
+
 ## 2.6.2
 
 - New (Full-screen inventory): bag space as gauges in the footer. A

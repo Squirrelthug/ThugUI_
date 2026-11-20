@@ -394,8 +394,33 @@ end
 
 
 
-P.SCHEMA = 1
-P.SCHEMA_STEPS = {}
+P.SCHEMA = 2
+P.SCHEMA_STEPS = {
+    
+    
+    
+    
+    
+    
+    
+    
+    [1] = {
+        { op = "retire", path = "db.Modules.facebuttons",
+          reason = "Face buttons joined the Controller tile as the Pad layout page" },
+        
+        
+        
+        
+        { op = "retire", path = "db.ControllerMode.mapShortcut",
+          reason = "The L1+R1 bottom face button is now the Pad layout 'cross' slot, which starts as Target Focus. Set the world map there: a 2.x profile with the map shortcut on loses it until you do" },
+        
+        
+        
+        
+        { op = "retire", path = "db.ControllerMode.stickReload",
+          reason = "the player removed built-in double presses, 2026-11-18" },
+    },
+}
 
 local function SplitPath(path)
     local segs = {}

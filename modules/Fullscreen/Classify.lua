@@ -20,7 +20,22 @@ local C = FS.Classify
 
 
 
+
+
+
+
 local CLASS_REAGENTS = {
+    
+    
+    
+    
+    
+    [5517] = "MAGE", 
+    [5518] = "MAGE", 
+    [8147] = "MAGE", 
+    [8148] = "MAGE", 
+    [5172] = "HUNTER", 
+    [5654] = "ROGUE", 
     [2892] = "ROGUE", 
     [2893] = "ROGUE", 
     [3775] = "ROGUE", 

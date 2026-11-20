@@ -46,6 +46,13 @@ ThugUI.defaults.GamepadChat = {
 local GC = GamepadChat
 GC.active = false
 
+
+
+
+GC.HOLD_DELAY = 0.35
+GC.HOLD_REPEAT = 0.05
+GC.HOLD_MAX = 10
+
 local hookedFrames = setmetatable({}, {__mode = "k"})
 local hookedAddMessage = setmetatable({}, {__mode = "k"})
 local editBoxOriginals = setmetatable({}, {__mode = "k"})
@@ -194,6 +201,8 @@ local function NewTabFrame()
     
     smf:SetJustifyH("LEFT")
     smf:SetHyperlinksEnabled(true)
+    
+    
     
     smf:EnableMouse(true)
     smf:EnableMouseWheel(true)
@@ -621,6 +630,7 @@ function GC:OnWindowShown()
 end
 
 function GC:OnWindowHidden()
+    GC:StopHoldScroll()
     if not InCombatLockdown() then GC:ArmInput() end
 end
 
@@ -808,7 +818,58 @@ local function CycleTab(step)
     UpdateTabVisibility()
 end
 
+local function AtScrollEdge(smf, direction)
+    local method = direction < 0 and smf.AtTop or smf.AtBottom
+    if type(method) ~= "function" then return false end
+    local ok, at = pcall(method, smf)
+    return ok and at == true
+end
+
+function GC:StopHoldScroll(noRelease)
+    if not GC.holdScroll then return end
+    GC.holdScroll = nil
+    local pad = GC.padFrame
+    if pad then pad:SetScript("OnUpdate", nil) end
+    if noRelease and ThugUI.Diagnostics and ThugUI.Diagnostics.LogOnce then
+        ThugUI.Diagnostics:LogOnce("chat-hold-scroll-no-release", "CHAT", "hold scroll stopped: no release heard")
+    end
+end
+
+local function ScrollActiveTab(direction)
+    local tab = ActiveTabObject()
+    local smf = tab and tab.smf
+    if not smf or AtScrollEdge(smf, direction) then return false end
+    if direction < 0 then smf:ScrollUp() else smf:ScrollDown() end
+    return not AtScrollEdge(smf, direction)
+end
+
+function GC:StartHoldScroll(button, direction)
+    GC:StopHoldScroll()
+    
+    
+    if not ScrollActiveTab(direction) then return end
+    GC.holdScroll = { button = button, direction = direction, elapsed = 0,
+                      next = GC.HOLD_DELAY + GC.HOLD_REPEAT }
+    local pad = GC.padFrame
+    if pad then
+        pad:SetScript("OnUpdate", function(_, elapsed)
+            local hold = GC.holdScroll
+            if not hold then return end
+            hold.elapsed = hold.elapsed + elapsed
+            if hold.elapsed >= GC.HOLD_MAX then
+                GC:StopHoldScroll(true)
+                return
+            end
+            while GC.holdScroll and hold.elapsed >= hold.next do
+                hold.next = hold.next + GC.HOLD_REPEAT
+                if not ScrollActiveTab(hold.direction) then GC:StopHoldScroll() end
+            end
+        end)
+    end
+end
+
 local function WindowPad(self, button)
+    if GC.holdScroll and button ~= GC.holdScroll.button then GC:StopHoldScroll() end
     local handled = false
     if button == (GAMEPAD_SHOULDER_LEFT or "PADLSHOULDER") or button == (GAMEPAD_DPAD_LEFT or "PADDLEFT") then
         CycleTab(-1)
@@ -817,12 +878,10 @@ local function WindowPad(self, button)
         CycleTab(1)
         handled = true
     elseif button == (GAMEPAD_DPAD_TOP or "PADDUP") then
-        local tab = ActiveTabObject()
-        if tab then tab.smf:ScrollUp() end
+        GC:StartHoldScroll(button, -1)
         handled = true
     elseif button == (GAMEPAD_DPAD_BOTTOM or "PADDDOWN") then
-        local tab = ActiveTabObject()
-        if tab then tab.smf:ScrollDown() end
+        GC:StartHoldScroll(button, 1)
         handled = true
     elseif button == (GAMEPAD_FACE_RIGHT or "PAD2") then
         local editActive = false
@@ -978,6 +1037,10 @@ function GC:Initialize()
     GC.padFrame = pad
     pad:SetAllPoints()
     pad:SetScript("OnGamePadButtonDown", WindowPad)
+    pad:SetScript("OnGamePadButtonUp", function(_, button)
+        if GC.holdScroll and GC.holdScroll.button == button then GC:StopHoldScroll() end
+    end)
+    pad:HookScript("OnHide", function() GC:StopHoldScroll() end)
 
     w:SetScript("OnShow", function() GC:OnWindowShown() end)
     w:SetScript("OnHide", function() GC:OnWindowHidden() end)

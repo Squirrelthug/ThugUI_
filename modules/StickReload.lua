@@ -7,223 +7,128 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 local ThugUI = _G.ThugUI
 local StickReload = {}
 ThugUI.StickReload = StickReload
-
-
-
-
-
-local RELOAD_BUTTONS = {
-    PADSOCIAL = "Select",
-    PADBACK = "Select",
-}
-
-
-local TAP_WINDOW = 0.4
-
-
-local BLOCK_WINDOW = 0.5
-
-local NOTICE_SECONDS = 6
 
 local function Log(fmt, ...)
     if ThugUI.Diagnostics then ThugUI.Diagnostics:Log("RELOAD", fmt, ...) end
 end
 
-local listener, cue
-local tapAt          
-local tapButton      
-local noticeUntil    
-local reloadAt       
-
-function StickReload:IsEnabled()
-    local c = ThugUIDB and ThugUIDB.ControllerMode
-    
-    
-    return not (c and c.stickReload == false)
-end
-
-function StickReload:IsWanted()
-    local CM = ThugUI.ControllerMode
-    return CM ~= nil and CM:IsActive() and self:IsEnabled()
-end
-
-function StickReload:IsListening() return listener ~= nil and listener.listening == true end
-function StickReload:GetListener() return listener end
-function StickReload:GetCue() return cue end
 
 
 
 
 
-local function HideCue()
-    if cue then
-        cue.text:SetText("")
-        cue:Hide()
+
+
+
+
+
+
+
+local XBOX, PLAYSTATION = "xbox", "playstation"
+
+
+StickReload.XBOX, StickReload.PLAYSTATION = XBOX, PLAYSTATION
+local VENDORS = { [0x045E] = XBOX, [0x054C] = PLAYSTATION }
+local padKind      
+local padSummary   
+
+local function KindFromName(name)
+    if type(name) ~= "string" then return nil end
+    local n = name:lower()
+    if n:find("xbox", 1, true) or n:find("xinput", 1, true) then return XBOX end
+    if n:find("dualsense", 1, true) or n:find("dualshock", 1, true)
+        or n:find("playstation", 1, true) or n:find("ps4", 1, true) or n:find("ps5", 1, true) then
+        return PLAYSTATION
     end
+    return nil
 end
 
-local function CueUpdate()
-    local now = GetTime()
-    if tapAt then
-        if now - tapAt <= TAP_WINDOW then
-            cue.text:SetText("Tap again to reload")
-            return
+
+
+local function DescribeDevice(gp, id)
+    local name, style, vendor, product
+    if gp.GetDeviceRawState then
+        local ok, raw = pcall(gp.GetDeviceRawState, id)
+        if ok and type(raw) == "table" then
+            name, vendor, product = raw.name, raw.vendorID, raw.productID
         end
-        
-        tapAt, tapButton = nil, nil
     end
-    if noticeUntil and now < noticeUntil then
-        cue.text:SetText("Type /reload")
-    else
-        noticeUntil = nil
-        HideCue()
-    end
-end
-
-local function BuildCue()
-    if cue then return cue end
-    cue = CreateFrame("Frame", "ThugUI_StickReloadCue", UIParent)
-    cue:SetSize(300, 30)
-    cue:SetPoint("TOP", UIParent, "TOP", 0, -120)
-    cue:SetFrameStrata("TOOLTIP")
-    cue.text = cue:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    cue.text:SetPoint("CENTER")
-    cue.text:SetText("")
-    
-    
-    cue:SetScript("OnUpdate", CueUpdate)
-    cue:Hide()
-    return cue
-end
-
-local function ShowNotice()
-    BuildCue()
-    noticeUntil = GetTime() + NOTICE_SECONDS
-    cue.text:SetText("Type /reload")
-    cue:Show()
-end
-
-
-
-
-
-local function DoReload(button)
-    Log("%s double-tapped, reloading", RELOAD_BUTTONS[button])
-    reloadAt = GetTime()
-    local ok, err = pcall(ReloadUI)
-    if not ok then
-        reloadAt = nil
-        Log("ReloadUI refused: %s", tostring(err))
-        ShowNotice()
-    end
-end
-
-
-
-local function OnDown(_, button)
-    if RELOAD_BUTTONS[button] then
-        Log("down %s", button)
-        local now = GetTime()
-        local waiting = tapAt and now - tapAt <= TAP_WINDOW
-        if waiting and button == tapButton then
-            
-            tapAt, tapButton = nil, nil
-            HideCue()
-            DoReload(button)
-        elseif waiting then
-            
-            tapAt, tapButton = nil, nil
-            HideCue()
-        else
-            
-            
-            tapAt, tapButton = now, button
-            noticeUntil = nil
-            BuildCue().text:SetText("Tap again to reload")
-            cue:Show()
+    if gp.GetDeviceMappedState then
+        local ok, mapped = pcall(gp.GetDeviceMappedState, id)
+        if ok and type(mapped) == "table" then
+            name = name or mapped.name
+            style = mapped.labelStyle
         end
-    elseif tapAt then
-        
-        tapAt, tapButton = nil, nil
-        HideCue()
     end
+    local kind = (type(vendor) == "number" and VENDORS[vendor]) or KindFromName(name)
+    local text = string.format("id=%s name=%s labelStyle=%s vendor=%s product=%s kind=%s",
+        tostring(id), tostring(name), tostring(style),
+        type(vendor) == "number" and string.format("0x%04X", vendor) or tostring(vendor),
+        type(product) == "number" and string.format("0x%04X", product) or tostring(product),
+        tostring(kind))
+    return kind, text
 end
 
 
 
 
-
-
-
-
-local function Start()
-    if listener and listener.listening then return true end
-    if InCombatLockdown() then return false end
-    if not listener then
-        listener = CreateFrame("Frame", "ThugUI_StickReloadListener", UIParent)
-        listener:SetSize(1, 1)
-        listener:SetPoint("TOPLEFT")
-        listener:SetScript("OnGamePadButtonDown", OnDown)
+function StickReload:IdentifyPad()
+    local gp = _G.C_GamePad
+    if not gp then
+        padKind = nil
+        return nil
     end
-    listener:Show()
-    local ok, err = pcall(listener.SetPropagateKeyboardInput, listener, true)
-    if not ok then
-        Log("listener: SetPropagateKeyboardInput refused: %s", tostring(err))
-        return false
+    local okActive, active = false, nil
+    if gp.GetActiveDeviceID then
+        okActive, active = pcall(gp.GetActiveDeviceID)
     end
-    if not listener.EnableGamePadButton then
-        Log("listener: no EnableGamePadButton on this client")
-        return false
+    local ids = {}
+    if gp.GetAllDeviceIDs then
+        local ok, all = pcall(gp.GetAllDeviceIDs)
+        if ok and type(all) == "table" then ids = all end
     end
-    ok, err = pcall(listener.EnableGamePadButton, listener, true)
-    if not ok then
-        Log("listener: EnableGamePadButton refused: %s", tostring(err))
-        return false
+    local kind, lines = nil, {}
+    if okActive and active ~= nil then
+        local k, text = DescribeDevice(gp, active)
+        kind = k
+        lines[#lines + 1] = "active " .. text
     end
-    listener.listening = true
-    Log("listener on")
-    return true
+    for _, id in ipairs(ids) do
+        if id ~= active then
+            local k, text = DescribeDevice(gp, id)
+            kind = kind or k
+            lines[#lines + 1] = text
+        end
+    end
+    padKind = kind
+    local summary = table.concat(lines, " | ")
+    if summary ~= padSummary then
+        padSummary = summary
+        Log("pad: %s", summary ~= "" and summary or "no device")
+        Log("pad kind: %s", tostring(kind))
+    end
+    return kind
 end
 
-local function Stop()
-    if not (listener and listener.listening) then return end
-    if InCombatLockdown() then return end
-    pcall(listener.EnableGamePadButton, listener, false)
-    listener.listening = false
-    tapAt, tapButton = nil, nil
-    HideCue()
-    Log("listener off")
+
+
+function StickReload:PadKind()
+    if padKind == nil then self:IdentifyPad() end
+    return padKind
 end
 
 
 
 function StickReload:Refresh()
-    if InCombatLockdown() then return end
-    if self:IsWanted() then Start() else Stop() end
+    return self:IdentifyPad()
+end
+
+
+function StickReload:ForgetPad()
+    padKind, padSummary = nil, nil
 end
 
 
@@ -231,23 +136,13 @@ end
 
 
 local events = CreateFrame("Frame", "ThugUI_StickReloadEvents")
-events:SetScript("OnEvent", function(_, event, addonName)
-    if event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
-        if addonName == "ThugUI" and reloadAt and GetTime() - reloadAt <= BLOCK_WINDOW then
-            reloadAt = nil
-            Log("ReloadUI blocked (%s)", event)
-            ShowNotice()
-        end
-    else
-        
-        StickReload:Refresh()
+events:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGIN" or event == "GAME_PAD_CONNECTED" or event == "GAME_PAD_DISCONNECTED"
+        or event == "GAME_PAD_ACTIVE_CHANGED" then
+        StickReload:IdentifyPad()
     end
 end)
 ThugUI.SafeRegisterEvent(events, "PLAYER_LOGIN")
-ThugUI.SafeRegisterEvent(events, "PLAYER_REGEN_ENABLED")
-ThugUI.SafeRegisterEvent(events, "ADDON_ACTION_BLOCKED")
-ThugUI.SafeRegisterEvent(events, "ADDON_ACTION_FORBIDDEN")
-
-if ThugUI.ControllerMode then
-    ThugUI.ControllerMode:RegisterCallback(function() StickReload:Refresh() end)
-end
+ThugUI.SafeRegisterEvent(events, "GAME_PAD_CONNECTED")
+ThugUI.SafeRegisterEvent(events, "GAME_PAD_DISCONNECTED")
+ThugUI.SafeRegisterEvent(events, "GAME_PAD_ACTIVE_CHANGED")

@@ -31,6 +31,11 @@ local UNBIND_DELAY = 0.5
 local BUTTON = "ThugUI_FSAction"
 
 
+
+local TARGET_BUTTON = "ThugUI_FSTarget"
+local STOP_BUTTONS = { stop = "ThugUI_FSStop", macro = "ThugUI_FSStopMacro" }
+
+
 A.LEGEND_LINES = 4
 
 local function Log(message, ...)
@@ -555,6 +560,23 @@ function A:Wanted()
     if not (frame and frame:IsShown()) then
         return nil
     end
+    local T = FS.Target
+    if T and T.active then
+        
+        
+        
+        if self.panel then
+            return nil
+        end
+        local at = A.TargetOf(FS:Focused())
+        if not at then
+            return nil
+        end
+        return {
+            key = T.APPLY_KEY, target = true, bag = at.bag, slot = at.slot,
+            action = { kind = "target", bag = at.bag, slot = at.slot },
+        }
+    end
     local action, key
     if self.panel then
         local row = self.panel.rows[self.panel.row]
@@ -580,9 +602,19 @@ function A:Sync()
         self.pending = true
         return
     end
+    self:SyncStop()
     local want = self:Wanted()
+    if not (want and want.target) then
+        self:DisarmTarget()
+    end
     if not want then
         self:Disarm(false)
+        return
+    end
+    if want.target then
+        
+        self:Disarm(true)
+        self:ArmTarget(want)
         return
     end
     if not self:Build() then
@@ -593,6 +625,20 @@ function A:Sync()
     if not ok then
         Log("action attribute refused: %s", tostring(err))
         return
+    end
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    if self.boundKey == want.key and not self:Owns(want.key) then
+        Log("binding retaken from %s", tostring(self:Holder(want.key)))
+        pcall(ClearOverrideBindings, self.owner)
+        self.boundKey = nil
     end
     if self.boundKey ~= want.key then
         if self.boundKey then
@@ -608,6 +654,227 @@ function A:Sync()
         end
     end
     self.armed = { bag = a.bag, slot = a.slot, itemID = a.itemID }
+end
+
+
+
+
+
+
+
+
+function A.TargetOf(item)
+    if type(item) ~= "table" or not item.itemID then
+        return nil
+    end
+    if item.kind == "equip" then
+        if type(item.slot) == "number" then
+            return { slot = item.slot }
+        end
+        return nil
+    end
+    if IsBagItem(item) then
+        return { bag = item.bag, slot = item.slot }
+    end
+    return nil
+end
+
+
+
+
+
+
+
+function A:BuildTarget()
+    if self.targetButton then
+        return true
+    end
+    if InCombatLockdown() then
+        return false
+    end
+    local ok, button = pcall(CreateFrame, "Button", TARGET_BUTTON, UIParent, "SecureActionButtonTemplate")
+    if not ok or not button then
+        Log("apply button not built: %s", tostring(button))
+        return false
+    end
+    pcall(button.RegisterForClicks, button, "AnyDown", "AnyUp")
+    pcall(button.Hide, button)
+    pcall(button.HookScript, button, "OnClick", function()
+        A:AfterTargetClick()
+    end)
+    self.targetButton = button
+    self.targetOwner = CreateFrame("Frame")
+    return true
+end
+
+
+
+
+function A:BuildStop()
+    if self.stopButtons then
+        return true
+    end
+    if InCombatLockdown() then
+        return false
+    end
+    local made = {}
+    for mode, name in pairs(STOP_BUTTONS) do
+        local ok, button = pcall(CreateFrame, "Button", name, UIParent, "SecureActionButtonTemplate")
+        if not ok or not button then
+            Log("stop button %s not built: %s", name, tostring(button))
+            return false
+        end
+        if mode == "stop" then
+            pcall(button.SetAttribute, button, "type", "stop")
+        else
+            pcall(button.SetAttribute, button, "type", "macro")
+            pcall(button.SetAttribute, button, "macrotext", "/stopspelltarget")
+        end
+        pcall(button.RegisterForClicks, button, "AnyDown", "AnyUp")
+        pcall(button.Hide, button)
+        pcall(button.HookScript, button, "OnClick", function()
+            if FS.Target then
+                FS.Target:AfterStop(mode)
+            end
+        end)
+        made[mode] = button
+    end
+    self.stopButtons = made
+    self.stopOwner = CreateFrame("Frame")
+    return true
+end
+
+
+
+
+local function TakeKey(self, field, owner, key, buttonName)
+    if self[field] == key and not self:Owns(key, buttonName) then
+        Log("binding retaken from %s", tostring(self:Holder(key)))
+        pcall(ClearOverrideBindings, owner)
+        self[field] = nil
+    end
+    if self[field] ~= key then
+        if self[field] then
+            pcall(ClearOverrideBindings, owner)
+            self[field] = nil
+        end
+        local ok, err = pcall(SetOverrideBindingClick, owner, true, key, buttonName, "LeftButton")
+        if not ok then
+            Log("binding %s refused: %s", buttonName, tostring(err))
+            return false
+        end
+        self[field] = key
+    end
+    return true
+end
+
+
+function A:ArmTarget(want)
+    if not self:BuildTarget() then
+        return
+    end
+    local b = self.targetButton
+    
+    
+    
+    
+    
+    local ok, err = pcall(function()
+        b:SetAttribute("target-slot", want.slot)
+        b:SetAttribute("target-bag", want.bag)
+        b:SetAttribute("*target-slot", nil)
+        b:SetAttribute("*target-bag", nil)
+    end)
+    if not ok then
+        Log("apply attribute refused: %s", tostring(err))
+        return
+    end
+    if TakeKey(self, "targetBoundKey", self.targetOwner, want.key, TARGET_BUTTON) then
+        self.armedTarget = { bag = want.bag, slot = want.slot }
+    end
+end
+
+function A:DisarmTarget()
+    if not self.targetBoundKey then
+        return
+    end
+    if Combat() then
+        self.pending = true
+        return
+    end
+    pcall(ClearOverrideBindings, self.targetOwner)
+    if self.targetButton then
+        pcall(self.targetButton.SetAttribute, self.targetButton, "target-slot", nil)
+        pcall(self.targetButton.SetAttribute, self.targetButton, "target-bag", nil)
+        pcall(self.targetButton.SetAttribute, self.targetButton, "*target-slot", nil)
+        pcall(self.targetButton.SetAttribute, self.targetButton, "*target-bag", nil)
+    end
+    self.targetBoundKey = nil
+    self.armedTarget = nil
+end
+
+
+function A:SyncStop()
+    local T = FS.Target
+    local frame = FS.UI and FS.UI.frame
+    if not (T and T.active and frame and frame:IsShown()) then
+        self:DisarmStop()
+        return
+    end
+    if not self:BuildStop() then
+        return
+    end
+    local mode = T.STOP_MODE == "macro" and "macro" or "stop"
+    local name = STOP_BUTTONS[mode]
+    if self.stopName and self.stopName ~= name and self.stopBoundKey then
+        
+        pcall(ClearOverrideBindings, self.stopOwner)
+        self.stopBoundKey = nil
+    end
+    self.stopName = name
+    TakeKey(self, "stopBoundKey", self.stopOwner, T.CANCEL_KEY, name)
+end
+
+function A:DisarmStop()
+    if not self.stopBoundKey then
+        return
+    end
+    if Combat() then
+        self.pending = true
+        return
+    end
+    pcall(ClearOverrideBindings, self.stopOwner)
+    self.stopBoundKey = nil
+end
+
+
+
+function A:AfterTargetClick()
+    local T = FS.Target
+    if T and T.active then
+        T:NoteApply("click")
+        T:AfterApply()
+    end
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0.6, function()
+            A:Sync()
+        end)
+    end
+end
+
+
+function A:Holder(key)
+    local ok, action = pcall(GetBindingAction, key, true)
+    return ok and action or nil
+end
+
+
+
+function A:Owns(key, name)
+    if type(GetBindingAction) ~= "function" then
+        return true
+    end
+    return self:Holder(key) == "CLICK " .. (name or BUTTON) .. ":LeftButton"
 end
 
 
@@ -652,6 +919,16 @@ function A:OnCombatStart()
         pcall(ClearOverrideBindings, self.owner)
     end
     self.boundKey = nil
+    
+    if self.targetOwner then
+        pcall(ClearOverrideBindings, self.targetOwner)
+    end
+    self.targetBoundKey = nil
+    self.armedTarget = nil
+    if self.stopOwner then
+        pcall(ClearOverrideBindings, self.stopOwner)
+    end
+    self.stopBoundKey = nil
 end
 
 function A:OnCombatEnd()
@@ -663,6 +940,13 @@ function A:OnCombatEnd()
 end
 
 function A:AfterClick()
+    
+    
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0.6, function()
+            A:Sync()
+        end)
+    end
     if self.panel and self.panel.id == "menu" then
         Later(function()
             A:ClosePanel()
@@ -674,6 +958,18 @@ end
 
 
 function A:ShouldPass(button)
+    local T = FS.Target
+    if T and T.active then
+        
+        if Combat() then
+            return false
+        end
+        if button == T.CANCEL_KEY and self.stopBoundKey == button then
+            return true
+        end
+        local want = self:Wanted()
+        return (want and want.target and self.targetBoundKey == button and want.key == button) and true or false
+    end
     if not self.boundKey or button ~= self.boundKey or Combat() then
         return false
     end
@@ -687,10 +983,57 @@ function A:ShouldPass(button)
     return true
 end
 
+
+
+
+
+
+function A:LogPress(button)
+    local T = FS.Target
+    if T and T.active then
+        
+        
+        local item = FS:Focused()
+        local at = A.TargetOf(item)
+        local okBind, bound = pcall(GetBindingAction, button, true)
+        local what = "none"
+        if button == T.CANCEL_KEY then
+            what = "back"
+        elseif at and at.bag then
+            what = "apply bag=" .. at.bag .. " slot=" .. at.slot
+        elseif at then
+            what = "equip slot=" .. at.slot
+        end
+        local name = TARGET_BUTTON
+        if button == T.CANCEL_KEY then
+            name = STOP_BUTTONS[self.stopName == STOP_BUTTONS.macro and "macro" or "stop"]
+        end
+        T.Log("press %s: %s | buttonOwned=%s binding=%s combat=%s", button, what,
+            tostring(self:Owns(button, name)), okBind and tostring(bound) or "?", tostring(Combat()))
+        if button ~= T.CANCEL_KEY then
+            T.Log("match %s", tostring(T.Match(item) or "DoesNotApply"))
+        end
+        return
+    end
+    local want = self:Wanted()
+    local action = A.MainAction(FS:Focused())
+    local okBind, bound = pcall(GetBindingAction, button, true)
+    Log("press %s: bound=%s game=%s want=%s kind=%s refusal=%s panel=%s combat=%s passing=%s armed=%s",
+        button, tostring(self.boundKey), okBind and tostring(bound) or "?",
+        want and (want.key .. " " .. want.action.bag .. " " .. want.action.slot) or "nil",
+        action and tostring(action.kind) or "nil", action and tostring(action.refusal) or "nil",
+        self.panel and tostring(self.panel.id) or "nil", tostring(Combat()), tostring(self.passing),
+        self.armed and (self.armed.bag .. " " .. self.armed.slot) or "nil")
+end
+
 function A:BeginPass(button)
     self:EndPass()
     self.pressAt = GetTime and GetTime() or 0
     self.passing = button
+    local T = FS.Target
+    if T and T.active and button == T.APPLY_KEY then
+        T:NoteApply("press")
+    end
     local input = FS.UI.input
     if input then
         pcall(input.SetPropagateKeyboardInput, input, true)
@@ -956,6 +1299,21 @@ end
 
 function A:PressMain()
     local item = FS:Focused()
+    local T = FS.Target
+    if T and T.active then
+        
+        
+        local side = SideOf(item)
+        if Combat() then
+            FS:Message(MSG_SWITCH, side)
+        elseif A.TargetOf(item) then
+            Log("press not passed to the apply button for %s", tostring(item.bag))
+            FS:Message(MSG_REFUSED, side)
+        else
+            FS:Message("Nothing here to use it on", side)
+        end
+        return
+    end
     local action = A.MainAction(item)
     if not action then
         return
@@ -2441,6 +2799,8 @@ function A:OnClose()
     self:HidePanel()
     self:EndPass()
     self:Disarm(true)
+    self:DisarmTarget()
+    self:DisarmStop()
     FS.pinned = nil
     FS.ClearRefusals()
 end
@@ -2468,6 +2828,20 @@ function FS.Legend()
         return out
     end
     local item = FS:Focused()
+    local T = FS.Target
+    if T and T.active then
+        
+        
+        
+        if type(item) == "table" and item.kind ~= "stat" and item.kind ~= "upkeep" then
+            Add("PAD1", G("ACTION_LABEL_SELECT", "Select"))
+        end
+        if A.TargetOf(item) then
+            Add(T.APPLY_KEY, ActionLabel("use"))
+        end
+        Add(T.CANCEL_KEY, CANCEL or "Cancel")
+        return out
+    end
     if type(item) == "table" and item.kind ~= "stat" and item.kind ~= "upkeep" then
         Add("PAD1", G("ACTION_LABEL_SELECT", "Select"))
         local action = A.MainAction(item)

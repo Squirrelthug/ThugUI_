@@ -680,6 +680,44 @@ local function HideCompareTooltips()
     for _, tip in ipairs(compareTips) do tip:Hide() end
 end
 
+
+
+
+
+
+
+
+
+
+
+local function AddStatChanges(tip, item, slot)
+    local okLink, rewardLink = pcall(GetQuestItemLink, item.type, item.index)
+    local okWorn, wornLink = pcall(GetInventoryItemLink, "player", slot)
+    if not (okLink and rewardLink and okWorn and wornLink) then return end
+    if not (C_TooltipComparison and C_TooltipComparison.GetItemComparisonDelta) then
+        if ThugUI.Diagnostics then
+            ThugUI.Diagnostics:LogOnce("dlgdelta:api", "DIALOGUE", "C_TooltipComparison.GetItemComparisonDelta missing: no stat changes in reward tooltips")
+        end
+        return
+    end
+    local ok, delta = pcall(C_TooltipComparison.GetItemComparisonDelta,
+        { hyperlink = rewardLink }, { hyperlink = wornLink }, nil, false)
+    if not ok then
+        if ThugUI.Diagnostics then
+            ThugUI.Diagnostics:LogOnce("dlgdelta:err", "DIALOGUE", "GetItemComparisonDelta failed: %s", tostring(delta))
+        end
+        return
+    end
+    if type(delta) ~= "table" or #delta == 0 then return end
+    tip:AddLine(" ")
+    tip:AddLine(_G.ITEM_DELTA_DESCRIPTION or "If you replace this item, the following stat changes will occur:", 1, 0.82, 0, true)
+    for _, text in ipairs(delta) do
+        if type(text) == "string" and text ~= "" then
+            tip:AddLine(text, 1, 1, 1, true)
+        end
+    end
+end
+
 local function ShowCompareTooltips(item, rewardTip)
     HideCompareTooltips()
     local slots = COMPARE_SLOTS[RewardEquipLoc(item) or ""]
@@ -694,6 +732,7 @@ local function ShowCompareTooltips(item, rewardTip)
         local worn = GetInventoryItemID and GetInventoryItemID("player", slot)
         if worn then
             tip:SetInventoryItem("player", slot)
+            AddStatChanges(tip, item, slot)
             
             
             tip:Show()

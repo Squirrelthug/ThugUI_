@@ -32,6 +32,11 @@
 
 
 
+
+
+
+
+
 local ThugUI = _G.ThugUI
 local FB = {}
 ThugUI.FaceButtons = FB
@@ -114,6 +119,8 @@ local function KnownSpells(out)
     for _, row in ipairs(found) do out[#out + 1] = row end
 end
 
+FB.KnownSpells = KnownSpells
+
 local function Macros(out)
     if not (GetNumMacros and GetMacroInfo) then return end
     local global, character = GetNumMacros()
@@ -126,6 +133,8 @@ local function Macros(out)
     for i = 1, global or 0 do Add(i) end
     for i = first, first + (character or 0) - 1 do Add(i) end
 end
+
+FB.Macros = Macros
 
 
 
@@ -265,6 +274,11 @@ function FB:UpdateIcons()
                 o:Hide()
             end
         end
+    end
+    
+    
+    if ThugUI.PadHints and ThugUI.PadHints.Refresh then
+        pcall(ThugUI.PadHints.Refresh, ThugUI.PadHints)
     end
 end
 

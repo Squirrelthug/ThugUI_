@@ -151,7 +151,13 @@ local function OpenCondition()
         or (_G.ContainerFrame1 and _G.ContainerFrame1:IsShown())
     local paper = _G.CharacterFrame and _G.CharacterFrame:IsShown()
         and _G.PaperDollFrame and _G.PaperDollFrame:IsShown()
-    return bags or paper
+    
+    
+    
+    
+    
+    local targeting = FS.Target and ((FS.Target.holdOpen and FS.Target.active) or FS.Target.castHold)
+    return bags or paper or targeting
 end
 
 
@@ -168,9 +174,86 @@ function FS.NewCell(parent)
     f.icon:SetPoint("TOPLEFT", 2, -2)
     f.icon:SetPoint("BOTTOMRIGHT", -2, 2)
     f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    f.count = f:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    
+    
+    
+    f.cooldown = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
+    f.cooldown:SetAllPoints(f.icon)
+    f.cooldown:Hide()
+    
+    
+    f.over = CreateFrame("Frame", nil, f)
+    f.over:SetAllPoints(f)
+    f.over:SetFrameLevel(f.cooldown:GetFrameLevel() + 1)
+    f.count = f.over:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     f.count:SetPoint("BOTTOMRIGHT", -3, 3)
+    FS.cells[#FS.cells + 1] = f
     return f
+end
+
+
+
+FS.cells = FS.cells or {}
+
+
+
+
+function FS.SizeCount(cell)
+    local h = cell:GetHeight() or 0
+    local size = math.max(12, math.floor(h * 0.32 + 0.5))
+    if cell.countSize == size then
+        return
+    end
+    local file = cell.countFile
+    if not file then
+        file = cell.count:GetFont() or _G.NumberFontNormal and _G.NumberFontNormal:GetFont() or STANDARD_TEXT_FONT
+        cell.countFile = file
+    end
+    if pcall(cell.count.SetFont, cell.count, file, size, "THICKOUTLINE") then
+        cell.countSize = size
+    end
+end
+
+
+
+
+function FS.SetCellCooldown(cell, item)
+    local cd = cell.cooldown
+    if not cd then
+        return
+    end
+    local start, duration, enable
+    local ok = false
+    if type(item) == "table" and item.itemID then
+        local c = _G.C_Container
+        if item.kind == nil and type(item.bag) == "number" and type(item.slot) == "number"
+            and c and c.GetContainerItemCooldown then
+            ok, start, duration, enable = pcall(c.GetContainerItemCooldown, item.bag, item.slot)
+        elseif item.kind == "equip" and type(item.slot) == "number" and _G.GetInventoryItemCooldown then
+            ok, start, duration, enable = pcall(_G.GetInventoryItemCooldown, "player", item.slot)
+        end
+    end
+    if not ok or start == nil then
+        cd:Hide()
+        return
+    end
+    local set = _G.CooldownFrame_Set
+    if type(set) == "function" then
+        if not pcall(set, cd, start, duration, enable) then
+            cd:Hide()
+        end
+    elseif not pcall(cd.SetCooldown, cd, start, duration) then
+        cd:Hide()
+    end
+end
+
+
+function FS:UpdateCooldowns()
+    for _, cell in ipairs(FS.cells) do
+        if cell:IsShown() and cell.item then
+            FS.SetCellCooldown(cell, cell.item)
+        end
+    end
 end
 
 
@@ -219,12 +302,17 @@ end
 
 function FS.PaintCell(cell, item)
     cell.item = item
+    if FS.Target then
+        FS.Target:PaintCastRing(cell, item)
+    end
     cell.icon:SetTexture(item.iconFileID)
     local text = item.countText
     if text == nil and item.stackCount and item.stackCount > 1 then
         text = item.stackCount
     end
     cell.count:SetText(text or "")
+    FS.SizeCount(cell)
+    FS.SetCellCooldown(cell, item)
     local r, g, b = 0.45, 0.45, 0.45
     local qr, qg, qb = 0.45, 0.45, 0.45
     local color = item.quality and _G.ITEM_QUALITY_COLORS and _G.ITEM_QUALITY_COLORS[item.quality]
@@ -266,6 +354,16 @@ function FS.PaintCell(cell, item)
     
     
     local refused = FS.Refusal and FS.Refusal(item) and true or false
+    
+    
+    
+    local match = FS.Target and FS.Target.Match(item)
+    if match == "mismatch" then
+        refused = true
+    end
+    if FS.Target then
+        FS.Target.PaintTick(cell, match == "match")
+    end
     cell.icon:SetDesaturated(refused)
     if refused then
         alpha = math.min(alpha, 0.6)
@@ -344,6 +442,8 @@ local function StyleOutline(f, thickness, r, g, b, a)
         end
     end
 end
+
+local WHITE_RGB = { 1, 1, 1 }
 
 
 
@@ -662,7 +762,14 @@ function FS:Build()
     
     UI.highlight = NewOutline(f, 2, 1, 1, 1, 1)
     UI.highlight:SetFrameLevel(f:GetFrameLevel() + 30)
-    UI.halfOutline = NewOutline(f, 2, 1, 1, 1, 1)
+    
+    
+    UI.highlight:SetScript("OnUpdate", function(frame, elapsed)
+        if FS.Target then
+            FS.Target:Pulse(frame, elapsed)
+        end
+    end)
+    UI.halfOutline =NewOutline(f, 2, 1, 1, 1, 1)
     UI.halfOutline:SetFrameLevel(f:GetFrameLevel() + 30)
 
     
@@ -827,11 +934,15 @@ end
 
 function FS:HalfMetrics(name)
     local size = self:Cfg().textSize
+    local half = UI.halves and UI.halves[name]
+    
+    
+    local headed = not (half and half.noHeading)
     if not self.framed then
-        return 0, self.titleHeight, self.contentWidth
+        return 0, headed and self.titleHeight or 0, self.contentWidth
     end
     local top = SK.PLATE_H + 4 + SK.WELL_PAD
-    if name == "bag" then
+    if name == "bag" and headed then
         top = top + size + 12
     end
     local width = self.contentWidth - 2 * SK.WELL_PAD - SK.SCROLL_W - SK.SCROLL_GAP
@@ -868,7 +979,8 @@ function FS:ApplyHalves()
             half.title:SetWidth(self.contentWidth)
         end
         
-        half.title:SetShown(not (self.framed and half.name == "plugin" and half.skin and half.skin.plate))
+        half.title:SetShown(not half.noHeading
+            and not (self.framed and half.name == "plugin" and half.skin and half.skin.plate))
     end
     plugin.frame:SetShown(show)
     self:ApplyHalfSkin()
@@ -1488,6 +1600,15 @@ function FS:UpdateHighlight()
     local framed = FS.Framed()
     local isCell = cell.icon ~= nil
     local glow = UI.highlight.glow
+    
+    
+    
+    local target = self.Target and self.Target.active
+    local tc = target and self.Target.TARGET_COLOR or WHITE_RGB
+    StyleOutline(UI.highlight, 2, tc[1], tc[2], tc[3], 1)
+    if glow and glow.SetTint then
+        glow:SetTint(tc[1], tc[2], tc[3], 1)
+    end
     local hideEdges = false
     if framed and isCell and glow then
         glow:Place("CENTER", cell, "CENTER", 0, 0, (cell:GetWidth() or 64) / 64)
@@ -2269,10 +2390,33 @@ end
 
 
 
+
+local function HeadingRepeats(title, lines)
+    local first = lines and lines[1] and lines[1].leftText
+    if type(title) ~= "string" or type(first) ~= "string" or title == "" then
+        return false
+    end
+    local function stripCodes(text)
+        return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+    end
+    title, first = stripCodes(title), stripCodes(first)
+    return first:find(title, 1, true) ~= nil or title:find(first, 1, true) ~= nil
+end
+
+
+
+
 function FS:RenderHalf(half, title, lines, key)
     local size = self:Cfg().textSize
     half.title:SetFont(STANDARD_TEXT_FONT, size + 6)
     half.title:SetText(title)
+    if half.name == "bag" then
+        local repeats = HeadingRepeats(title, lines)
+        if repeats ~= (half.noHeading or false) then
+            half.noHeading = repeats
+            self:ApplyHalves()
+        end
+    end
     
     self:SetPlateText(half, half.name == "bag" and (self.sourceLabel or "Info") or title)
     if key ~= half.key then
@@ -2393,11 +2537,23 @@ function FS:Describe()
     self:SetBottomShown(panel ~= nil or pin ~= nil or slots ~= nil)
 
     local bag = UI.halves.bag
+    
+    
+    local T = self.Target
+    local targeting = T and T.active
     if top then
         local title, lines = self:Lines(top)
-        self:RenderHalf(bag, title or "Info", lines or {}, ItemKey(top))
+        lines = lines or {}
+        if targeting then
+            lines = T:DecorateLines(lines, top)
+        end
+        self:RenderHalf(bag, title or "Info", lines, ItemKey(top))
     else
-        self:RenderHalf(bag, "Info", { { leftText = HINT_TOP, leftColor = FS.MUTED } }, "hint")
+        local hint = { { leftText = HINT_TOP, leftColor = FS.MUTED } }
+        if targeting then
+            hint = T:DecorateLines(hint, nil, true)
+        end
+        self:RenderHalf(bag, "Info", hint, "hint")
     end
 
     if panel then
@@ -2545,8 +2701,10 @@ function FS:RegisterRefresh(on)
         return
     end
     local events = {
-        "BAG_UPDATE_DELAYED", "PLAYER_EQUIPMENT_CHANGED", "ITEM_LOCK_CHANGED",
+        "BAG_UPDATE_DELAYED", "PLAYER_EQUIPMENT_CHANGED", "ITEM_LOCK_CHANGED", "PLAYER_MONEY",
         "ITEM_DATA_LOAD_RESULT", "GET_ITEM_INFO_RECEIVED",
+        
+        "BAG_UPDATE_COOLDOWN",
         "UI_SCALE_CHANGED", "DISPLAY_SIZE_CHANGED",
     }
     for _, e in ipairs(events) do
@@ -2802,6 +2960,18 @@ function FS:Open()
     self:RegisterRefresh(true)
     self:Refresh()
     
+    
+    local regionIndex, focusIndex = self:ColumnLanding(self:OpeningColumn())
+    if regionIndex and regionIndex ~= self.regionIndex then
+        self.regionIndex, self.focusIndex = regionIndex, focusIndex
+        self:FocusChanged()
+    end
+    if self.Target then
+        
+        self.Target:OnOpen(self.openedBy)
+    end
+    self.openedBy = nil
+    
     self.Character:RefreshModel()
     self:LogAboveUs()
     self:LogGlyphStrings()
@@ -2828,6 +2998,11 @@ end
 function FS:Close(propagate)
     if not UI.frame or not UI.frame:IsShown() then
         return
+    end
+    
+    
+    if self.Target then
+        self.Target.holdOpen = false
     end
     if propagate and not InCombatLockdown() then
         UI.input:SetPropagateKeyboardInput(true)
@@ -2887,7 +3062,12 @@ function FS:PollPopups(elapsed)
     if not UI.frame or not UI.frame:IsShown() then
         return
     end
-    local up = self.Actions:PollPopup() and true or false
+    
+    
+    if self.Target then
+        self.Target:Poll()
+    end
+    local up =self.Actions:PollPopup() and true or false
     if up ~= (self.popupUp and true or false) then
         self.popupUp = up
         UI.input:SetShown(not up)
@@ -2975,6 +3155,13 @@ function FS:OnButtonDown(button)
     
     
     self.Actions:EndPass()
+    
+    if button == "PAD3" or button == "PAD1" or (button == "PAD2" and self.Target and self.Target.active) then
+        self.Actions:LogPress(button)
+        
+        
+        self.Actions:Sync()
+    end
     if self.Actions:ShouldPass(button) then
         self.Actions:BeginPass(button)
         return
@@ -3051,6 +3238,9 @@ local function Hook(frame)
     end
     hooked[frame] = true
     pcall(frame.HookScript, frame, "OnShow", function()
+        
+        
+        FS.openedBy = frame
         Later(function()
             FS:Evaluate()
         end)
@@ -3060,6 +3250,23 @@ local function Hook(frame)
             FS:Evaluate()
         end)
     end)
+end
+
+
+
+
+
+
+function FS:OpeningColumn()
+    
+    if self.Target and self.Target.active then
+        return "right"
+    end
+    local by = self.openedBy
+    if by and (by == _G.ContainerFrameCombinedBags or by == _G.ContainerFrame1) then
+        return "right"
+    end
+    return "left"
 end
 
 function FS:InstallHooks()
@@ -3103,6 +3310,11 @@ local function OnEvent(_, event, unit)
     elseif event == "PLAYER_EQUIPMENT_CHANGED" then
         FS.Character:RefreshModel()
         FS:ScheduleRefresh()
+    elseif event == "PLAYER_MONEY" then
+        FS.Bags:UpdateMoney()
+    elseif event == "BAG_UPDATE_COOLDOWN" then
+        
+        FS:UpdateCooldowns()
     elseif event == "BAG_UPDATE_DELAYED" then
         
         FS.ClearRefusals()
@@ -3135,6 +3347,9 @@ function FS:Initialize()
     self:Build()
     self:InstallHooks()
     self:InstallTooltipGuard()
+    if self.Target then
+        self.Target:Initialize()
+    end
     self.eventFrame = UI.frame
     UI.frame:SetScript("OnEvent", OnEvent)
     local events = {

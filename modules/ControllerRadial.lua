@@ -29,7 +29,6 @@
 
 
 
-
 local ThugUI = _G.ThugUI
 local ControllerRadial = {}
 ThugUI.ControllerRadial = ControllerRadial
@@ -1518,55 +1517,124 @@ end
 
 
 
-
-
-
-
-local DOUBLE_TAP = 0.4
-local lastStart = nil
-
-
-function ControllerRadial:IsStart(button)
-    local key = GetBindingKey and GetBindingKey("OPENRADIAL")
-    if type(key) ~= "string" or key == "" then key = "PADFORWARD" end
-    return button == key
-end
-
-function ControllerRadial:OnStart()
-    local now = GetTime()
+function ControllerRadial:IsBlizzardRadialShown()
     local radial = _G.GamepadRadial
-    local open = radial and radial:IsShown()
-    if open and lastStart and now - lastStart <= DOUBLE_TAP then
-        lastStart = nil
-        Crumb("start double-tap")
-        C_Timer.After(0, function() ControllerRadial:Open() end)
-    else
-        lastStart = now
+    if not (radial and radial.IsShown) then return false end
+    local ok, shown = pcall(radial.IsShown, radial)
+    return ok and shown == true
+end
+
+function ControllerRadial:WheelKeys()
+    local keys, seen = {}, {}
+    local PL = ThugUI.PadLayout
+    if PL and PL.SLOTS and PL.KeyFor and PL.SlotForKey and PL.Get then
+        for _, slot in ipairs(PL.SLOTS) do
+            local key = PL:KeyFor(slot.id)
+            local parent = PL.TWICE_OF and PL.TWICE_OF[slot.id]
+            
+            
+            
+            
+            
+            
+            if key and PL:Get(slot.id) == "thug:wheel"
+                and ((parent and PL:SlotForKey(key) == parent) or (not parent and PL:SlotForKey(key) == slot.id))
+                and not seen[key] then
+                seen[key] = true
+                keys[#keys + 1] = key
+            end
+        end
     end
+    local trigger, mods = self:GetTrigger()
+    if trigger and mods and #mods > 0 then
+        Log("radial yield: skipped modified wheel trigger %s", table.concat(mods, "-") .. "-" .. trigger)
+    elseif trigger and not seen[trigger] then
+        keys[#keys + 1] = trigger
+    end
+    return keys
+end
+
+function ControllerRadial:QueueOpenAfterRadial(key)
+    if not self:IsBlizzardRadialShown() then return false end
+    if InCombatLockdown and InCombatLockdown() then
+        self.pendingOpen = nil
+        Refuse("Close the menu first.")
+        return true
+    end
+    self.pendingOpen = { key = key, time = GetTime() }
+    C_Timer.After(0.3, function()
+        local pending = ControllerRadial.pendingOpen
+        if pending and pending.key == key and ControllerRadial:IsBlizzardRadialShown() then
+            ControllerRadial.pendingOpen = nil
+            Log("Blizzard's B did not close the radial from %s", tostring(key))
+            Refuse("Close the menu first.")
+        end
+    end)
+    return true
+end
+
+function ControllerRadial:InstallBlizzardRadial()
+    if self.radialHooked then return true end
+    local radial = _G.GamepadRadial
+    if not (radial and radial.HookScript) then
+        if not self.radialMissingLogged then
+            self.radialMissingLogged = true
+            Log("Blizzard GamepadRadial not found; radial handoff unavailable")
+        end
+        return false
+    end
+    radial:HookScript("OnShow", function()
+        if InCombatLockdown and InCombatLockdown() then return end
+        local PL = ThugUI.PadLayout
+        local keys = ControllerRadial:WheelKeys()
+        
+        
+        if #keys == 0 then return end
+        if PL and PL.YieldToRadial then PL:YieldToRadial(true, keys) end
+        Log("radial shown: lent %d key(s)", #keys)
+    end)
+    radial:HookScript("OnHide", function()
+        local PL = ThugUI.PadLayout
+        
+        
+        if PL and PL.YieldToRadial and PL.yieldingRadial then PL:YieldToRadial(false) end
+        if not (InCombatLockdown and InCombatLockdown()) then
+            Log("radial hidden: keys back")
+            local pending = ControllerRadial.pendingOpen
+            if pending and GetTime() - pending.time < 0.5 then
+                ControllerRadial.pendingOpen = nil
+                C_Timer.After(0, function()
+                    if not (InCombatLockdown and InCombatLockdown()) and not ControllerRadial:IsBlizzardRadialShown() then
+                        ControllerRadial:Open()
+                        if frame and frame:IsShown() then Log("pending open -> opened") end
+                    end
+                end)
+            else
+                ControllerRadial.pendingOpen = nil
+            end
+        end
+    end)
+    self.radialHooked = true
+    Log("Blizzard GamepadRadial: hooked")
+    return true
 end
 
 
 
 
+function ControllerRadial:IsRadialKey(button)
+    local ok, action = pcall(GetBindingAction, button, true)
+    if ok and action == "OPENRADIAL" then return true end
+    local PL = ThugUI.PadLayout
+    if PL then return button == PL:RadialKey() end
+    return button == (GetBindingKey("OPENRADIAL") or "PADFORWARD")
+end
 
-
-
-
-
-local PAD_SCREENSHOT = "PADBACK"
-local lastBack = nil
-
-function ControllerRadial:OnBack()
-    local now = GetTime()
-    if lastBack and now - lastBack <= DOUBLE_TAP then
-        lastBack = nil
-        C_Timer.After(0, function()
-            local ok, err = pcall(Screenshot)
-            Log("screenshot by double press: %s", ok and "taken" or tostring(err))
-        end)
-    else
-        lastBack = now
-    end
+function ControllerRadial:IsWheelSlotKey(button)
+    local PL = ThugUI.PadLayout
+    if not (PL and PL.SlotForKey and PL.Get) then return false end
+    local slot = PL:SlotForKey(button)
+    return slot ~= nil and PL:Get(slot) == "thug:wheel"
 end
 
 local listener
@@ -1591,11 +1659,7 @@ function ControllerRadial:StartListener()
             end
             if ControllerRadial:IsTrigger(button) then
                 Crumb("pad trigger " .. tostring(button))
-                ControllerRadial:Open()
-            elseif ControllerRadial:IsStart(button) then
-                ControllerRadial:OnStart()
-            elseif button == PAD_SCREENSHOT then
-                ControllerRadial:OnBack()
+                ControllerRadial:Toggle(button)
             end
         end)
         listener:SetScript("OnGamePadButtonUp", function(_, button) held[button] = nil end)
@@ -1624,14 +1688,54 @@ end
 function ControllerRadial:GetListener() return listener end
 
 
-
 function ControllerRadial:IsListening() return listener ~= nil and listener.listening == true end
 
 local function OnButton(_, button)
     local self = ControllerRadial
     held[button] = true
-    if self:IsTrigger(button) then
-        self:Close()
+    local PL = ThugUI.PadLayout
+    local parent = PL and PL.SlotForKey and PL:SlotForKey(button)
+    
+    
+    if PL and PL.CancelDouble and parent ~= "start" and parent ~= "view" then PL:CancelDouble() end
+    if self:IsRadialKey(button) then
+        
+        
+        
+        if PL and PL.NotePress and (parent == "start" or parent == "view") then PL:NotePress(button) end
+        if InCombatLockdown and InCombatLockdown() then
+            self:Close()
+            Refuse("Wheel closed: press " .. ButtonGlyph(button) .. " again for the menu.")
+        else
+            if not self.startOnWheelLogged then
+                self.startOnWheelLogged = true
+                Log("Start on the wheel: %s -> passthrough", tostring(button))
+            end
+            
+            
+            pcall(frame.SetPropagateKeyboardInput, frame, true)
+            self:Close()
+            C_Timer.After(0, function()
+                if frame and not (InCombatLockdown and InCombatLockdown()) then
+                    pcall(frame.SetPropagateKeyboardInput, frame, false)
+                end
+            end)
+            C_Timer.After(0.3, function()
+                local shown = self:IsBlizzardRadialShown()
+                self.startPassLogged = self.startPassLogged or {}
+                if not self.startPassLogged[shown] then
+                    self.startPassLogged[shown] = true
+                    Log("Start passthrough: radial shown=%s", tostring(shown))
+                end
+            end)
+        end
+    elseif (self:IsTrigger(button) or self:IsWheelSlotKey(button)) then
+        
+        
+        if PL and self:IsWheelSlotKey(button) and PL.NotePress and (parent == "start" or parent == "view") then PL:NotePress(button) end
+        
+        
+        if self.openedAt ~= GetTime() then self:Close() end
     elseif button == PAD_BACK then
         if self.handPick then
             
@@ -2001,6 +2105,12 @@ end
 function ControllerRadial:Open()
     
     
+    if self:IsBlizzardRadialShown() then
+        Refuse("Close the menu first.")
+        return false
+    end
+    
+    
     if not self:ArmInput() and InCombatLockdown() then
         Refuse("Not in combat.")
         Log("open refused: input not armed before combat")
@@ -2015,6 +2125,7 @@ function ControllerRadial:Open()
     self.selected, self.stickSelected = nil, false
     self:Draw()
     frame:Show()
+    self.openedAt = GetTime()
     SetInput(true)
     Crumb("open")
     Log("opened on %s, %d page(s), combat=%s", tostring(self.pages[self.pageIndex].header),
@@ -2104,12 +2215,18 @@ function ControllerRadial:Close()
     end
 end
 
-function ControllerRadial:Toggle()
+function ControllerRadial:Toggle(key)
     if not ThugUI:IsModuleOn("controller") then
         print("ThugUI: Controller is turned off on the Modules page.")
         return
     end
-    if frame and frame:IsShown() then self:Close() else self:Open() end
+    if frame and frame:IsShown() then
+        self:Close()
+    elseif self:QueueOpenAfterRadial(key) then
+        
+    else
+        self:Open()
+    end
 end
 
 function ControllerRadial:GetFrame() return frame end
@@ -2168,6 +2285,9 @@ function ControllerRadial:Initialize()
             return
         elseif event == "ADDON_LOADED" then
             if arg1 == "Blizzard_GamepadActionBars" then ControllerRadial:InstallTriangle() end
+            
+            
+            if arg1 == "Blizzard_Gamepad" then ControllerRadial:InstallBlizzardRadial() end
             return
         end
         if event == "MINIMAP_UPDATE_TRACKING" or event == "PLAYER_EQUIPMENT_CHANGED"
@@ -2182,6 +2302,7 @@ function ControllerRadial:Initialize()
             ControllerRadial:StartListener()
             ControllerRadial:ArmInput()
             ControllerRadial:InstallTriangle()
+            ControllerRadial:InstallBlizzardRadial()
             
             if event == "PLAYER_LOGIN" and not (frame and frame:IsShown()) then ControllerRadial:HoldCamera(false) end
             if event == "PLAYER_LOGIN" then ControllerRadial:LogCameraCVars() end
