@@ -394,7 +394,7 @@ end
 
 
 
-P.SCHEMA = 2
+P.SCHEMA = 3
 P.SCHEMA_STEPS = {
     
     
@@ -419,6 +419,14 @@ P.SCHEMA_STEPS = {
         
         { op = "retire", path = "db.ControllerMode.stickReload",
           reason = "the player removed built-in double presses, 2026-11-18" },
+    },
+    
+    
+    
+    
+    
+    [2] = {
+        { op = "retype", path = "db.Fullscreen.character", fn = function() return false end },
     },
 }
 

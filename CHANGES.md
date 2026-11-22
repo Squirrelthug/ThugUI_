@@ -1,5 +1,21 @@
 # ThugUI
 
+## 3.0.2
+
+- Changed (Full-screen inventory): off by default. This update turns it off
+  once even if you had it on; turn it back on with the new button at the top
+  of its page (Settings, Controller, Full-screen inventory).
+- New (Full-screen inventory): Window mode. The inventory becomes a window
+  you move by dragging and resize from its bottom-right corner, for screens
+  where full screen is not all visible. The rest of the screen is covered
+  (adjustable), and a Reset window position button puts it back.
+- New (Full-screen inventory): Window scale, 30% to 200%, in both modes.
+  Icon sizes now go from 25% to 400% and text size from 8 to 48.
+- Changed (Full-screen inventory): swapping a bag is left to the game. A
+  bag that holds items can be replaced by another; if the game refuses a
+  swap, its own message shows in the window. Removing a bag that holds
+  items still asks you to empty it first.
+
 ## 3.0.1
 
 - Changed (Full-screen window, controller): in combat the bags are

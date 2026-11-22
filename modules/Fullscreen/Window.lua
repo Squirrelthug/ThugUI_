@@ -13,7 +13,17 @@ ThugUI:RegisterModule("Fullscreen", FS)
 
 
 ThugUI.defaults.Fullscreen = {
-    character = true, combatClose = true, textSize = 18, skin = true,
+    
+    
+    character = false, combatClose = true, textSize = 18, skin = true,
+    
+    
+    
+    
+    
+    
+    
+    windowed = false, winScale = 100, winW = 1280, winH = 800, winLeft = -1, winTop = -1, cover = 100,
     
     
     
@@ -69,10 +79,18 @@ end
 
 
 
+FS.ICON_MIN, FS.ICON_MAX = 25, 400
+FS.TEXT_MIN, FS.TEXT_MAX = 8, 48
+FS.SCALE_MIN, FS.SCALE_MAX = 30, 200
+FS.WIN_MIN_W, FS.WIN_MIN_H = 480, 320
+
+
+
+
 
 function FS:IconSize(key, base)
     local pct = tonumber(self:Cfg()[key]) or 100
-    pct = math.max(50, math.min(300, pct))
+    pct = math.max(FS.ICON_MIN, math.min(FS.ICON_MAX, pct))
     return math.max(8, math.floor(base * pct / 100 + 0.5))
 end
 
@@ -650,15 +668,95 @@ function FS.SetTabGlyphsLit(pair, lit)
     pair.right:SetAlpha(alpha)
 end
 
+local function Clamp(value, lo, hi, fallback)
+    value = tonumber(value) or fallback
+    return math.max(lo, math.min(hi, value))
+end
+
+
+function FS:WindowScale()
+    return Clamp(self:Cfg().winScale, FS.SCALE_MIN, FS.SCALE_MAX, 100) / 100
+end
+
+
+
 
 
 local function ScreenSize()
+    local cfg = FS:Cfg()
+    if cfg.windowed then
+        return Clamp(cfg.winW, FS.WIN_MIN_W, 4000, 1280), Clamp(cfg.winH, FS.WIN_MIN_H, 3000, 800)
+    end
     local w = tonumber(UIParent:GetWidth()) or 0
     local h = tonumber(UIParent:GetHeight()) or 0
     if w < 400 or h < 300 then
-        return 1920, 1080
+        w, h = 1920, 1080
     end
-    return w, h
+    local scale = FS:WindowScale()
+    return w / scale, h / scale
+end
+FS.ScreenSize = ScreenSize
+
+
+
+function FS:SaveGeometry()
+    local f = UI.frame
+    local cfg = self:Cfg()
+    local left, top = tonumber(f:GetLeft()), tonumber(f:GetTop())
+    local w, h = tonumber(f:GetWidth()), tonumber(f:GetHeight())
+    if left and top then
+        cfg.winLeft, cfg.winTop = math.floor(left + 0.5), math.floor(top + 0.5)
+    end
+    if w and h then
+        cfg.winW = math.floor(Clamp(w, FS.WIN_MIN_W, 4000, 1280) + 0.5)
+        cfg.winH = math.floor(Clamp(h, FS.WIN_MIN_H, 3000, 800) + 0.5)
+    end
+end
+
+
+
+
+
+function FS:ApplyGeometry()
+    local f = UI.frame
+    if not f or UI.sizing then
+        return
+    end
+    local cfg = self:Cfg()
+    local scale = self:WindowScale()
+    f:SetScale(scale)
+    f:ClearAllPoints()
+    if cfg.windowed then
+        local w, h = ScreenSize()
+        f:SetSize(w, h)
+        local left, top = tonumber(cfg.winLeft) or -1, tonumber(cfg.winTop) or -1
+        if left >= 0 and top >= 0 then
+            f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+        else
+            f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        end
+        pcall(f.SetMovable, f, true)
+        pcall(f.SetResizable, f, true)
+        
+        if not pcall(f.SetResizeBounds, f, FS.WIN_MIN_W, FS.WIN_MIN_H) then
+            pcall(f.SetMinResize, f, FS.WIN_MIN_W, FS.WIN_MIN_H)
+        end
+        pcall(f.SetClampedToScreen, f, true)
+        UI.grip:Show()
+    else
+        f:SetAllPoints(UIParent)
+        pcall(f.SetClampedToScreen, f, false)
+        UI.grip:Hide()
+    end
+    local cover = Clamp(cfg.cover, 0, 100, 100) / 100
+    UI.cover:SetAlpha(cover)
+    
+    UI.cover:EnableMouse(cover > 0)
+    if cfg.windowed and cover > 0 and f:IsShown() then
+        UI.cover:Show()
+    else
+        UI.cover:Hide()
+    end
 end
 
 
@@ -731,6 +829,59 @@ function FS:Build()
     f:Hide()
     UI.frame = f
     self.frame = f
+
+    
+    
+    UI.cover = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+    UI.cover:SetAllPoints(UIParent)
+    UI.cover:SetFrameStrata("TOOLTIP")
+    UI.cover:SetFrameLevel(990)
+    UI.cover:SetBackdrop({ bgFile = WHITE })
+    UI.cover:SetBackdropColor(0, 0, 0, 1)
+    UI.cover:Hide()
+    f:HookScript("OnShow", function() FS:ApplyGeometry() end)
+    f:HookScript("OnHide", function() UI.cover:Hide() end)
+
+    
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", function(frame)
+        if FS:Cfg().windowed then
+            frame:StartMoving()
+        end
+    end)
+    f:SetScript("OnDragStop", function(frame)
+        frame:StopMovingOrSizing()
+        if FS:Cfg().windowed then
+            FS:SaveGeometry()
+        end
+    end)
+    
+    UI.grip = CreateFrame("Button", nil, f)
+    UI.grip:SetSize(20, 20)
+    UI.grip:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2)
+    UI.grip:SetFrameLevel(f:GetFrameLevel() + 50)
+    UI.grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    UI.grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    UI.grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    UI.grip:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" and FS:Cfg().windowed then
+            UI.sizing = true
+            f:StartSizing("BOTTOMRIGHT")
+        end
+    end)
+    UI.grip:SetScript("OnMouseUp", function()
+        if not UI.sizing then
+            return
+        end
+        f:StopMovingOrSizing()
+        UI.sizing = nil
+        FS:SaveGeometry()
+        FS:Layout()
+        if f:IsShown() then
+            FS:Refresh()
+        end
+    end)
+    UI.grip:Hide()
 
     UI.left = CreateFrame("Frame", nil, f)
     UI.infoColumn = CreateFrame("Frame", nil, f)
@@ -819,6 +970,7 @@ function FS:Layout()
     if not UI.frame then
         return
     end
+    self:ApplyGeometry()
     local size = self:Cfg().textSize
     local sw, sh = ScreenSize()
     local framed = FS.Framed()

@@ -293,7 +293,6 @@ end
 local MSG_BACKPACK = "The backpack cannot be changed."
 local MSG_BAGS_COMBAT = "Bags cannot be changed in combat."
 local MSG_NO_EMPTY_SLOT = "No empty bag slot: Y to choose one to replace"
-local MSG_BAG_INSIDE = "That bag is inside the bag you are replacing."
 local MSG_NO_ROOM = "No free slot to put this bag in."
 
 
@@ -408,6 +407,10 @@ end
 
 
 
+
+
+
+
 function FS.CanPlaceBag(bagItem, n)
     if Combat() then
         return false, MSG_BAGS_COMBAT
@@ -420,25 +423,6 @@ function FS.CanPlaceBag(bagItem, n)
     end
     if not A.IsBag(bagItem) then
         return false, "That is not a bag."
-    end
-    local size, free = BagInfo(n)
-    if bagItem.bag == n then
-        return false, MSG_BAG_INSIDE
-    end
-    if size > 0 and size - free > 0 then
-        return false, "Empty this bag first: it holds " .. ItemsText(size - free) .. "."
-    end
-    local family = A.ItemFamily(bagItem.itemID)
-    if family == 1 or family == 2 then
-        for other = 1, BagSlots() do
-            if other ~= n then
-                local _, _, otherFamily = BagInfo(other)
-                if otherFamily == family then
-                    return false, family == 1 and G("ERR_ONLY_ONE_QUIVER", "You can only use one quiver or ammo pouch.")
-                        or G("ERR_ONLY_ONE_AMMO", "You can only use one quiver or ammo pouch.")
-                end
-            end
-        end
     end
     return true
 end
@@ -1150,6 +1134,40 @@ end
 
 
 
+
+
+
+
+
+local GAME_ERROR_WINDOW = 1.5
+local errorFrame
+
+function A.OnGameError(message)
+    if type(message) ~= "string" or message == "" or not Readable(message) then
+        return
+    end
+    local now = _G.GetTime and _G.GetTime() or 0
+    if not A.errorUntil or now > A.errorUntil then
+        return
+    end
+    A.gameError = message
+    Log("bag swap refused by the game: %s", message)
+    FS:Message(message, "bag")
+end
+
+function A.WatchGameError()
+    A.gameError = nil
+    A.errorUntil = (_G.GetTime and _G.GetTime() or 0) + GAME_ERROR_WINDOW
+    if not errorFrame and _G.CreateFrame then
+        errorFrame = _G.CreateFrame("Frame")
+        
+        errorFrame:SetScript("OnEvent", function(_, _, _, message)
+            A.OnGameError(message)
+        end)
+        ThugUI.SafeRegisterEvent(errorFrame, "UI_ERROR_MESSAGE")
+    end
+end
+
 function A:PlaceBag(item, n)
     local ok, why = FS.CanPlaceBag(item, n)
     if not ok then
@@ -1170,6 +1188,7 @@ function A:PlaceBag(item, n)
         return false
     end
     local oldID = _G.GetInventoryItemID and _G.GetInventoryItemID("player", inv)
+    A.WatchGameError()
     ClearCursorSafe()
     local okPick, errPick = pcall(c.PickupContainerItem, item.bag, item.slot)
     if not okPick or (_G.CursorHasItem and not Cursor()) then
@@ -1202,7 +1221,9 @@ function A:PlaceBag(item, n)
     end
     if refused or Cursor() then
         ClearCursorSafe()
-        FS:Message(MSG_REFUSED, "bag")
+        
+        
+        FS:Message(A.gameError or MSG_REFUSED, "bag")
         return false
     end
     return true
